@@ -23,3 +23,12 @@ export const listComments = (id) => request.get(`/contents/${id}/comments`)
 
 // 发表评论：body 为纯文本
 export const createComment = (id, body) => request.post(`/contents/${id}/comments`, { body })
+
+// 我的发布列表：{ page, size } -> { total, items }（需登录）
+export const mineContents = (params) => request.get('/contents/mine', { params })
+
+// 编辑自己发布的内容（需登录）
+export const updateContent = (id, data) => request.put(`/contents/${id}`, data)
+
+// 删除自己发布的内容（需登录，连带删除评论）
+export const deleteContent = (id) => request.delete(`/contents/${id}`)
