@@ -11,7 +11,9 @@ const store = useUserStore()
 const isLoggedIn = computed(() => store.isLoggedIn)
 
 function onCommand(cmd) {
-  if (cmd === 'logout') {
+  if (cmd === 'mine') {
+    router.push('/mine')
+  } else if (cmd === 'logout') {
     store.logout()
     ElMessage.success('已退出登录')
     router.push('/')
@@ -32,7 +34,8 @@ function onCommand(cmd) {
           <span class="user-name">{{ store.userInfo?.nickname }} ▾</span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              <el-dropdown-item command="mine">我的发布</el-dropdown-item>
+              <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
