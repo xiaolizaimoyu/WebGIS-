@@ -29,3 +29,15 @@ class ContentIn(BaseModel):
 
 class CommentIn(BaseModel):
     body: str = Field(min_length=1, max_length=500)
+
+
+class ProfileUpdateIn(BaseModel):
+    """个人资料更新：字段为 None 表示不改，avatar 传空串 "" 表示清除头像。"""
+
+    nickname: Optional[str] = Field(default=None, min_length=1, max_length=30)
+    avatar: Optional[str] = Field(default=None, max_length=200)
+
+
+class ChangePasswordIn(BaseModel):
+    old_password: str
+    new_password: str = Field(min_length=6, max_length=64)

@@ -22,6 +22,7 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(index=True, unique=True, description="登录账号，唯一")
     nickname: str = Field(description="展示昵称")
+    avatar: Optional[str] = Field(default=None, max_length=200, description="头像图片 URL（/uploads/xx），可空")
     password_hash: str = Field(description="bcrypt 哈希，绝不返回给前端")
     created_at: datetime = Field(default_factory=datetime.now)
 
