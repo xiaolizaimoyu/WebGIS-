@@ -14,6 +14,7 @@ python -m uvicorn app.main:app --reload --port 8000
 - 自动接口文档：`http://127.0.0.1:8000/docs`（可在线调试每个接口）
 - 数据库文件：首次启动自动生成 `backend/app.db`
 - 上传图片目录：`backend/uploads/`（首次启动自动创建，已加入 .gitignore）
+- 填充演示数据（可选）：`python -m app.seed`（生成 5 个演示账号[密码 123456]、15 条帖子与占位图，幂等可重复，不影响真实数据）
 
 ## 模块归属
 

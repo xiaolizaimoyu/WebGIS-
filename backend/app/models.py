@@ -42,6 +42,8 @@ class Content(SQLModel, table=True):
         sa_column=Column(JSON),
         description="图片 URL 列表，如 ['/uploads/xxx.png']",
     )
+    longitude: Optional[float] = Field(default=None, description="经度（WGS84，地图选点获得，可空）")
+    latitude: Optional[float] = Field(default=None, description="纬度（WGS84，地图选点获得，可空）")
     author_id: int = Field(foreign_key="users.id", index=True)
     created_at: datetime = Field(default_factory=datetime.now)
 

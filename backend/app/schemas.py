@@ -22,9 +22,12 @@ class LoginIn(BaseModel):
 class ContentIn(BaseModel):
     title: str = Field(min_length=1, max_length=80)
     body: str = Field(min_length=1, max_length=5000)
-    type: str = Field(description="activity | meeting | news | ad")
+    type: str = Field(description="activity | meeting | news | ad | food | lost")
     category: Optional[str] = Field(default=None, max_length=20)
     images: List[str] = Field(default_factory=list)
+    # 地图选点坐标（可空；两端需同时给才生效）
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
 
 
 class CommentIn(BaseModel):
