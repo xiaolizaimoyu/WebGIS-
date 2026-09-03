@@ -9,9 +9,13 @@ import { useUserStore } from '@/stores/user'
 const router = useRouter()
 const store = useUserStore()
 const isLoggedIn = computed(() => store.isLoggedIn)
+const avatarUrl = computed(() => store.userInfo?.avatar || '')
+const avatarText = computed(() => (store.userInfo?.nickname || '?').slice(0, 1))
 
 function onCommand(cmd) {
-  if (cmd === 'mine') {
+  if (cmd === 'profile') {
+    router.push('/profile')
+  } else if (cmd === 'mine') {
     router.push('/mine')
   } else if (cmd === 'logout') {
     store.logout()
@@ -31,9 +35,15 @@ function onCommand(cmd) {
           ＋ 发布内容
         </el-button>
         <el-dropdown v-if="isLoggedIn" @command="onCommand">
-          <span class="user-name">{{ store.userInfo?.nickname }} ▾</span>
+          <span class="user-name">
+            <el-avatar :size="26" :src="avatarUrl || undefined" class="nav-avatar">
+              {{ avatarText }}
+            </el-avatar>
+            {{ store.userInfo?.nickname }} ▾
+          </span>
           <template #dropdown>
             <el-dropdown-menu>
+              <el-dropdown-item command="profile">个人中心</el-dropdown-item>
               <el-dropdown-item command="mine">我的发布</el-dropdown-item>
               <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
@@ -86,9 +96,19 @@ function onCommand(cmd) {
 }
 
 .user-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   cursor: pointer;
   color: #303133;
   outline: none;
+}
+
+.nav-avatar {
+  background: #1d6df0;
+  color: #fff;
+  font-size: 13px;
+  flex-shrink: 0;
 }
 
 .app-main {

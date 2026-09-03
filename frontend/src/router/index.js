@@ -39,6 +39,12 @@ const routes = [
         meta: { title: '我的发布', requiresAuth: true }
       },
       {
+        path: 'profile',
+        name: 'profile',
+        component: () => import('@/views/ProfileView.vue'),
+        meta: { title: '个人中心', requiresAuth: true }
+      },
+      {
         path: 'content/:id',
         name: 'detail',
         component: () => import('@/views/DetailView.vue'),

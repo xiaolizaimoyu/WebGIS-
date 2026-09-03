@@ -23,6 +23,12 @@ export const useUserStore = defineStore('user', {
       localStorage.setItem('campus_user', JSON.stringify(data.user))
     },
 
+    // 更新资料后同步 userInfo（合并并持久化），由个人中心页调用
+    setUser(user) {
+      this.userInfo = { ...this.userInfo, ...user }
+      localStorage.setItem('campus_user', JSON.stringify(this.userInfo))
+    },
+
     // 退出：清空状态
     logout() {
       this.token = ''
