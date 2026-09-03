@@ -27,6 +27,18 @@ const routes = [
         meta: { title: '发布', requiresAuth: true } // 未登录访问会被拦截到登录页
       },
       {
+        path: 'publish/:id',
+        name: 'publish-edit',
+        component: () => import('@/views/PublishView.vue'),
+        meta: { title: '编辑内容', requiresAuth: true }
+      },
+      {
+        path: 'mine',
+        name: 'mine',
+        component: () => import('@/views/MineView.vue'),
+        meta: { title: '我的发布', requiresAuth: true }
+      },
+      {
         path: 'content/:id',
         name: 'detail',
         component: () => import('@/views/DetailView.vue'),
