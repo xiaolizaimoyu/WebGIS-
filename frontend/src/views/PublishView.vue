@@ -8,7 +8,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as postApi from '@/api/post'
-import { AD_CATEGORIES } from '@/api/const'
+import { AD_CATEGORIES, TYPE_LIST } from '@/api/const'
+import LocationPicker from '@/components/map/LocationPicker.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -36,14 +37,29 @@ const fileList = ref([]) // el-upload 双向列表；新传成功 file.response=
 const previewVisible = ref(false)
 const previewUrl = ref('')
 
+// 地图定位（可选）：开启后在地图上点选，保存经纬度供地图页展示
+const locEnabled = ref(false)
+const location = ref(null) // { lng, lat } 或 null
+
 // 编辑模式：拉取原内容回填表单与图片
+// 说明：历史图把服务器地址包进 response.url，和「新上传成功」的 file 结构统一，
+//      提交收集时就只认 response.url 一条通道，避免混入 blob: 本地临时地址。
 async function loadEditing() {
   const data = await postApi.getContent(editId.value)
   form.title = data.title
   form.body = data.body
   form.type = data.type
   form.category = data.category || ''
-  fileList.value = (data.images || []).map((url) => ({ name: url.split('/').pop(), url }))
+  fileList.value = (data.images || []).map((url) => ({
+    name: url.split('/').pop(),
+    url,
+    response: { url }
+  }))
+  // 已有位置则回填选点
+  if (data.longitude != null && data.latitude != null) {
+    locEnabled.value = true
+    location.value = { lng: Number(data.longitude), lat: Number(data.latitude) }
+  }
 }
 
 onMounted(() => {
@@ -69,10 +85,11 @@ function onExceed() {
   ElMessage.warning('最多上传 5 张图片')
 }
 
-// 收集待提交图片：新传图用 response.url，历史图用自身 url（相对路径 /uploads/...）
+// 收集待提交图片：只认「后端返回的服务器地址」file.response.url
+// 本地预览用的 blob: 临时地址一律不入库；未上传完成/失败的文件没有 response，会被安全跳过。
 function collectImages() {
   return fileList.value
-    .map((f) => (f.response ? f.response.url : isEdit.value ? f.url : null))
+    .map((f) => (f.response && f.response.url ? f.response.url : null))
     .filter(Boolean)
 }
 
@@ -94,6 +111,10 @@ async function submit() {
       type: form.type,
       category: isAd.value ? form.category : undefined,
       images: collectImages()
+    }
+    if (locEnabled.value && location.value) {
+      payload.longitude = location.value.lng
+      payload.latitude = location.value.lat
     }
     let data
     if (isEdit.value) {
@@ -118,10 +139,9 @@ async function submit() {
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="内容分类" prop="type">
           <el-radio-group v-model="form.type">
-            <el-radio-button value="activity">校园活动</el-radio-button>
-            <el-radio-button value="meeting">校园会议</el-radio-button>
-            <el-radio-button value="news">校园动态</el-radio-button>
-            <el-radio-button value="ad">校园广告</el-radio-button>
+            <el-radio-button v-for="t in TYPE_LIST" :key="t.value" :value="t.value">
+              {{ t.label }}
+            </el-radio-button>
           </el-radio-group>
         </el-form-item>
 
@@ -164,6 +184,14 @@ async function submit() {
           </el-upload>
         </el-form-item>
 
+        <el-form-item label="地图位置">
+          <div class="loc-line">
+            <el-switch v-model="locEnabled" />
+            <span class="loc-hint">开启后在地图上点击即可拾取位置（会显示在校园地图页）</span>
+          </div>
+          <LocationPicker v-if="locEnabled" v-model="location" />
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" :loading="submitting" @click="submit">
             {{ isEdit ? '保存修改' : '立即发布' }}
@@ -184,5 +212,17 @@ async function submit() {
   color: #8c939d;
   font-size: 13px;
   line-height: 1.6;
+}
+
+.loc-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.loc-hint {
+  font-size: 13px;
+  color: #a8abb2;
 }
 </style>
