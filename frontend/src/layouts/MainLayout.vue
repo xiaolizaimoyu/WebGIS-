@@ -30,6 +30,10 @@ function onCommand(cmd) {
     <el-header class="app-header">
       <div class="header-inner">
         <router-link to="/" class="brand">🎓 校园活动交流平台</router-link>
+        <nav class="nav">
+          <router-link to="/" class="nav-link">首页</router-link>
+          <router-link to="/map" class="nav-link">校园地图</router-link>
+        </nav>
         <div class="spacer" />
         <el-button v-if="isLoggedIn" type="primary" round @click="router.push('/publish')">
           ＋ 发布内容
@@ -89,6 +93,28 @@ function onCommand(cmd) {
   font-size: 20px;
   font-weight: 700;
   color: #1d6df0;
+}
+
+.nav {
+  display: flex;
+  gap: 18px;
+  margin-left: 20px;
+}
+
+.nav-link {
+  font-size: 15px;
+  color: #606266;
+  padding: 4px 2px;
+  border-bottom: 2px solid transparent;
+}
+
+.nav-link:hover {
+  color: #1d6df0;
+}
+
+.nav-link.router-link-exact-active {
+  color: #1d6df0;
+  border-bottom-color: #1d6df0;
 }
 
 .spacer {
