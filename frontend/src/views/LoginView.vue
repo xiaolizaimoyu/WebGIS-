@@ -2,7 +2,7 @@
 // 登录页（归属：前端 A）——校园风格登录模板
 // TODO(前端A)：校园风景背景、验证码、记住我、找回密码等扩展点
 // 说明：登录成功后会回到 redirect 指定的来源页（如被拦截的发布页）
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
@@ -14,6 +14,18 @@ const store = useUserStore()
 const formRef = ref()
 const loading = ref(false)
 const form = reactive({ username: '', password: '' })
+
+// 记住账号：勾选后把账号存 localStorage，下次自动回填
+const REMEMBER_KEY = 'campus_remember_user'
+const remember = ref(false)
+
+onMounted(() => {
+  const saved = localStorage.getItem(REMEMBER_KEY)
+  if (saved) {
+    form.username = saved
+    remember.value = true
+  }
+})
 
 const rules = {
   username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
@@ -30,6 +42,9 @@ async function submit() {
   try {
     await store.login({ ...form })
     ElMessage.success('登录成功')
+    // 记住我：勾选则保存账号，否则清除
+    if (remember.value) localStorage.setItem(REMEMBER_KEY, form.username.trim())
+    else localStorage.removeItem(REMEMBER_KEY)
     // 回到拦截前的页面；若无则回首页
     const redirect = route.query.redirect
     router.push(redirect ? String(redirect) : '/')
@@ -53,6 +68,9 @@ async function submit() {
         </el-form-item>
         <el-form-item prop="password">
           <el-input v-model="form.password" type="password" placeholder="请输入密码" show-password />
+        </el-form-item>
+        <el-form-item class="remember-item">
+          <el-checkbox v-model="remember">记住账号</el-checkbox>
         </el-form-item>
         <el-button class="submit-btn" type="primary" size="large" :loading="loading" @click="submit">
           登 录
@@ -102,6 +120,10 @@ async function submit() {
 .submit-btn {
   width: 100%;
   margin-top: 6px;
+}
+
+.remember-item {
+  margin-bottom: 2px;
 }
 
 .footer {
