@@ -43,7 +43,16 @@
 错误：密码错误返回 `code: 1001`。
 
 **GET /api/user/me** — 获取当前登录用户（鉴权）
-成功 data：`{id, username, nickname}`
+成功 data：`{id, username, nickname, avatar, created_at}`（avatar 可空）
+
+**PUT /api/user/me** — 更新个人资料（鉴权）
+请求体：`{ "nickname": "新昵称", "avatar": "/uploads/xx.png" }`
+说明：字段缺省/传 `null` = 不改；`avatar` 传空串 `""` = 清除头像。
+成功 data：更新后的用户对象。
+
+**PUT /api/user/password** — 修改密码（鉴权）
+请求体：`{ "old_password": "原密码", "new_password": "至少6位新密码" }`
+失败：原密码不正确返回 `code: 1003`。修改成功后下次登录需用新密码。
 
 ### 图片上传（内容模块，鉴权）
 
@@ -61,6 +70,18 @@
 **GET /api/contents** — 内容列表（首页信息流）
 Query：`type`（可选，不传=全部）、`page`（默认1）、`size`（默认10）
 成功 data：`{ "total": 100, "items": [内容对象] }`（按发布时间倒序，含作者信息）
+
+**GET /api/contents/mine** — 我的发布列表（鉴权）
+Query：`page`、`size`
+成功 data：`{ "total": N, "items": [...] }`，仅当前登录用户发布的内容，按时间倒序。
+
+**PUT /api/contents/{id}** — 编辑自己发布的内容（鉴权，仅作者本人）
+请求体：同发布 `{title, body, type, category?, images?}`（全量提交）
+失败：非本人操作返回 `code: 2003`。
+
+**DELETE /api/contents/{id}** — 删除自己发布的内容（鉴权，仅作者本人）
+删除该内容时会**连带删除其下所有评论**，不可恢复。
+失败：非本人操作返回 `code: 2003`。
 
 **GET /api/contents/{id}** — 内容详情
 成功 data：内容对象（含作者昵称）。
@@ -97,6 +118,8 @@ Query：`type`（可选，不传=全部）、`page`（默认1）、`size`（默�
 | 401 | 未登录 / Token 失效 |
 | 1001 | 用户名或密码错误 |
 | 1002 | 用户名已存在 |
+| 1003 | 原密码不正确（修改密码时） |
 | 2001 | 内容不存在 |
 | 2002 | 分类 type 不合法 |
+| 2003 | 只能编辑/删除自己发布的内容（非作者操作） |
 | 400 | 参数校验失败（msg 为具体原因） |
