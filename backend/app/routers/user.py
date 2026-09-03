@@ -12,14 +12,20 @@ from app.core.response import BizError, ok
 from app.core.security import create_token, get_current_user, hash_password, verify_password
 from app.db import get_session
 from app.models import User
-from app.schemas import LoginIn, RegisterIn
+from app.schemas import ChangePasswordIn, LoginIn, ProfileUpdateIn, RegisterIn
 
 router = APIRouter(prefix="/api/user", tags=["用户认证"])
 
 
 def user_public(user: User) -> dict:
-    """对外暴露的用户信息（去掉密码哈希）。"""
-    return {"id": user.id, "username": user.username, "nickname": user.nickname}
+    """对外暴露的用户信息（去掉密码哈希），注册/登录/me/更新资料共用同一结构。"""
+    return {
+        "id": user.id,
+        "username": user.username,
+        "nickname": user.nickname,
+        "avatar": user.avatar,
+        "created_at": user.created_at,
+    }
 
 
 @router.post("/register", summary="注册")
@@ -51,3 +57,34 @@ def login(data: LoginIn, session: Session = Depends(get_session)):
 @router.get("/me", summary="当前登录用户")
 def me(user: User = Depends(get_current_user)):
     return ok(user_public(user))
+
+
+@router.put("/me", summary="更新个人资料（昵称/头像）")
+def update_profile(
+    data: ProfileUpdateIn,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    # 字段为 None = 不改；avatar 传空串 "" = 清除头像
+    if data.nickname is not None:
+        user.nickname = data.nickname
+    if data.avatar is not None:
+        user.avatar = data.avatar or None
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return ok(user_public(user), "资料已更新")
+
+
+@router.put("/password", summary="修改密码")
+def change_password(
+    data: ChangePasswordIn,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    if not verify_password(data.old_password, user.password_hash):
+        raise BizError(1003, "原密码不正确")
+    user.password_hash = hash_password(data.new_password)
+    session.add(user)
+    session.commit()
+    return ok(None, "密码修改成功，下次请用新密码登录")
