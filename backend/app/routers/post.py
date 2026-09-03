@@ -27,6 +27,12 @@ router = APIRouter(prefix="/api", tags=["内容与评论"])
 VALID_TYPES = {"activity", "meeting", "news", "ad"}
 
 
+def _ensure_valid_type(content_type: str) -> None:
+    """type 合法性校验（创建 / 编辑共用）。"""
+    if content_type not in VALID_TYPES:
+        raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
+
+
 # ---------- 序列化辅助 ----------
 def content_to_dict(content: Content, author_name: str) -> dict:
     return {
@@ -88,8 +94,7 @@ def create_content(
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ):
-    if data.type not in VALID_TYPES:
-        raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
+    _ensure_valid_type(data.type)
     content = Content(
         title=data.title,
         body=data.body,
@@ -129,6 +134,79 @@ def list_contents(
         "total": total,
         "items": [content_to_dict(c, name_map.get(c.author_id, "未知用户")) for c in items],
     })
+
+
+@router.get("/contents/mine", summary="我的发布列表（需登录）")
+def list_my_contents(
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=10, ge=1, le=50),
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """当前登录用户发布的内容，按时间倒序。
+
+    注意：/contents/mine 必须声明在 /contents/{content_id} 之前，
+    否则 "mine" 会被当成 id 解析而报 422。
+    """
+    total = session.exec(
+        select(func.count(Content.id)).where(Content.author_id == user.id)
+    ).one()
+    stmt = (
+        select(Content)
+        .where(Content.author_id == user.id)
+        .order_by(Content.created_at.desc(), Content.id.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    items = session.exec(stmt).all()
+    return ok({
+        "total": total,
+        "items": [content_to_dict(c, user.nickname) for c in items],
+    })
+
+
+@router.put("/contents/{content_id}", summary="编辑自己发布的内容（需登录）")
+def update_content(
+    content_id: int,
+    data: ContentIn,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    content = session.get(Content, content_id)
+    if content is None:
+        raise BizError(2001, "内容不存在或已被删除")
+    if content.author_id != user.id:
+        raise BizError(2003, "只能编辑自己发布的内容")
+    _ensure_valid_type(data.type)
+    content.title = data.title
+    content.body = data.body
+    content.type = data.type
+    content.category = data.category
+    content.images = data.images
+    session.add(content)
+    session.commit()
+    session.refresh(content)
+    return ok(content_to_dict(content, user.nickname), "修改成功")
+
+
+@router.delete("/contents/{content_id}", summary="删除自己发布的内容（需登录）")
+def delete_content(
+    content_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    content = session.get(Content, content_id)
+    if content is None:
+        raise BizError(2001, "内容不存在或已被删除")
+    if content.author_id != user.id:
+        raise BizError(2003, "只能删除自己发布的内容")
+    # 连带删除该内容下的所有评论，避免留下孤儿评论
+    comments = session.exec(select(Comment).where(Comment.content_id == content.id)).all()
+    for c in comments:
+        session.delete(c)
+    session.delete(content)
+    session.commit()
+    return ok({"id": content_id, "deleted": True}, "删除成功")
 
 
 @router.get("/contents/{content_id}", summary="内容详情")
