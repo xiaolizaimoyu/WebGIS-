@@ -23,8 +23,8 @@ from app.schemas import CommentIn, ContentIn
 
 router = APIRouter(prefix="/api", tags=["内容与评论"])
 
-# 内容一级分类，见 docs/API.md
-VALID_TYPES = {"activity", "meeting", "news", "ad"}
+# 内容一级分类，见 docs/API.md（含智慧校园新增：food 美食分享 / lost 失物招领）
+VALID_TYPES = {"activity", "meeting", "news", "ad", "food", "lost"}
 
 
 def _ensure_valid_type(content_type: str) -> None:
@@ -42,6 +42,8 @@ def content_to_dict(content: Content, author_name: str) -> dict:
         "type": content.type,
         "category": content.category,
         "images": content.images or [],
+        "longitude": content.longitude,
+        "latitude": content.latitude,
         "author_id": content.author_id,
         "author_name": author_name,
         "created_at": content.created_at,
@@ -95,12 +97,16 @@ def create_content(
     user: User = Depends(get_current_user),
 ):
     _ensure_valid_type(data.type)
+    # 经纬度需成对出现才写入（供地图渲染），否则留空
+    has_loc = data.longitude is not None and data.latitude is not None
     content = Content(
         title=data.title,
         body=data.body,
         type=data.type,
         category=data.category,
         images=data.images,
+        longitude=data.longitude if has_loc else None,
+        latitude=data.latitude if has_loc else None,
         author_id=user.id,
     )
     session.add(content)
@@ -183,6 +189,10 @@ def update_content(
     content.type = data.type
     content.category = data.category
     content.images = data.images
+    # 经纬度成对才更新
+    if data.longitude is not None and data.latitude is not None:
+        content.longitude = data.longitude
+        content.latitude = data.latitude
     session.add(content)
     session.commit()
     session.refresh(content)
