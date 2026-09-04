@@ -15,8 +15,10 @@ export const TYPE_LIST = Object.entries(TYPE_MAP).map(([value, item]) => ({
   label: item.label
 }))
 
-// 时间显示：2026-09-02T18:52:03 -> 2026-09-02 18:52
+// 时间显示：支持 ISO 字符串（2026-09-02T18:52:03）和数字时间戳
 export function formatTime(value) {
   if (!value) return ''
-  return String(value).replace('T', ' ').slice(0, 16)
+  // 数字时间戳转换为 ISO 格式
+  const str = typeof value === 'number' ? new Date(value).toISOString() : String(value)
+  return str.replace('T', ' ').slice(0, 16)
 }

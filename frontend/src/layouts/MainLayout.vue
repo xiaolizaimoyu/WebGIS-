@@ -77,12 +77,13 @@ function onCommand(cmd) {
 }
 
 .header-inner {
-  max-width: 980px;
+  max-width: 1400px;
   height: 100%;
   margin: 0 auto;
   display: flex;
   align-items: center;
   gap: 16px;
+  padding: 0 20px;
 }
 
 .brand {
