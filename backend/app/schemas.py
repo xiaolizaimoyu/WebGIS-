@@ -22,9 +22,12 @@ class LoginIn(BaseModel):
 class ContentIn(BaseModel):
     title: str = Field(min_length=1, max_length=80)
     body: str = Field(min_length=1, max_length=5000)
-    type: str = Field(description="activity | meeting | news | ad")
+    type: str = Field(description="activity | meeting | news | ad | food | lost")
     category: Optional[str] = Field(default=None, max_length=20)
     images: List[str] = Field(default_factory=list)
+    # WebGIS 新增：地图选点经纬度，可不传；传则必须经/纬成对且范围合法
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180, description="经度")
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90, description="纬度")
 
 
 class CommentIn(BaseModel):
