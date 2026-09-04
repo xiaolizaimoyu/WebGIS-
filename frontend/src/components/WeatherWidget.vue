@@ -1,204 +1,207 @@
 <script setup>
-// 右上角常驻天气小组件（归属：前端 B）
-// 《新增功能规划书》三-7 天气出行提示模块：
-// - 对接免费天气 API（Open-Meteo，无需注册、无需 key、支持浏览器直连）
-// - 展示今日 / 明日天气与气温，并结合天气给出校园出行建议
-// - 可手动展开 / 收起，不做自动弹窗
-// 挂载方式（前端 C 整合时执行一行）：在 MainLayout.vue 的模板中加入 <WeatherWidget />
-import { onMounted, ref } from 'vue'
+// 天气组件（归属：天气模块）——紧凑天气卡片
+// 对外契约：
+//   props: city (城市名), useMock (是否使用模拟数据，默认 true)
+//   emit:  loaded(weatherData)
+import { ref, onMounted, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 
-// 校园坐标（示例为广州大学城，可改成本校坐标）
-const CAMPUS = { lng: 113.3946, lat: 23.0392 }
+const props = defineProps({
+  city: { type: String, default: '北京' },
+  useMock: { type: Boolean, default: true }
+})
 
-const open = ref(false) // 是否展开
-const loading = ref(true)
-const failed = ref(false)
-const today = ref(null)
-const tomorrow = ref(null)
-const tip = ref('')
+const emit = defineEmits(['loaded'])
 
-// WMO 天气现象代码 → [文案, 图标]（Open-Meteo 使用 WMO 标准代码）
-const WMO_MAP = {
-  0: ['晴', '☀️'], 1: ['基本晴', '🌤️'], 2: ['多云', '⛅'], 3: ['阴', '☁️'],
-  45: ['雾', '🌫️'], 48: ['雾凇', '🌫️'],
-  51: ['小毛毛雨', '🌦️'], 53: ['毛毛雨', '🌦️'], 55: ['大毛毛雨', '🌧️'],
-  61: ['小雨', '🌦️'], 63: ['中雨', '🌧️'], 65: ['大雨', '🌧️'],
-  66: ['冻雨', '🌧️'], 67: ['强冻雨', '🌧️'],
-  71: ['小雪', '🌨️'], 73: ['中雪', '🌨️'], 75: ['大雪', '❄️'], 77: ['雪粒', '🌨️'],
-  80: ['阵雨', '🌦️'], 81: ['阵雨', '🌧️'], 82: ['强阵雨', '⛈️'],
-  85: ['阵雪', '🌨️'], 86: ['阵雪', '❄️'],
-  95: ['雷阵雨', '⛈️'], 96: ['雷雨伴冰雹', '⛈️'], 99: ['雷雨伴冰雹', '⛈️']
+const loading = ref(false)
+const weather = ref({
+  city: props.city,
+  temp: '--',
+  text: '加载中',
+  windDir: '--',
+  windScale: '--',
+  humidity: '--',
+  icon: '☀️'
+})
+
+// 天气图标映射
+const weatherIcons = {
+  '晴': '☀️',
+  '多云': '⛅',
+  '阴': '☁️',
+  '小雨': '🌦️',
+  '中雨': '🌧️',
+  '大雨': '🌧️',
+  '雪': '🌨️',
+  '雷阵雨': '⛈️',
+  '雾': '🌫️'
 }
 
-function describe(code) {
-  return WMO_MAP[code] || ['未知', '🌡️']
-}
-
-// 结合今日天气生成出行建议（规划书要求，无强制弹窗）
-function buildTip(d) {
-  if ([51, 53, 55, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(d.code)) {
-    return '今天有雨，出门记得带伞 ☂️'
+// 模拟天气数据
+function getMockWeather(city) {
+  const conditions = Object.keys(weatherIcons)
+  const cond = conditions[Math.floor(Math.random() * conditions.length)]
+  return {
+    city,
+    temp: Math.floor(Math.random() * 20) + 10,
+    text: cond,
+    windDir: ['东风', '南风', '西风', '北风'][Math.floor(Math.random() * 4)],
+    windScale: Math.floor(Math.random() * 5) + 1,
+    humidity: Math.floor(Math.random() * 40) + 40,
+    icon: weatherIcons[cond] || '🌤️'
   }
-  if (d.tMax >= 32) return '今天高温，注意防晒、多补水 🧴'
-  if (d.tMin <= 5) return '今天降温，记得添件外套 🧥'
-  if ([45, 48].includes(d.code)) return '今天有雾，出行注意交通安全 🚶'
-  return '天气不错，适合出门活动 🎉'
 }
 
-// 天气接口走 fetch 直连外部 API，不经过 /api 代理与 axios 封装
+// 真实API调用（和风天气，需配置 API_KEY 后启用）
+async function fetchRealWeather(city) {
+  // TODO: 替换为你的和风天气 API KEY
+  const API_KEY = ''
+  if (!API_KEY) {
+    throw new Error('未配置天气 API KEY')
+  }
+  const res = await fetch(
+    `https://devapi.qweather.com/v7/weather/now?location=${encodeURIComponent(city)}&key=${API_KEY}`
+  )
+  const data = await res.json()
+  if (data.code !== '200') throw new Error('天气接口异常')
+  const now = data.now
+  return {
+    city,
+    temp: now.temp,
+    text: now.text,
+    windDir: now.windDir,
+    windScale: now.windScale,
+    humidity: now.humidity,
+    icon: weatherIcons[now.text] || '🌤️'
+  }
+}
+
 async function loadWeather() {
   loading.value = true
-  failed.value = false
   try {
-    const url =
-      'https://api.open-meteo.com/v1/forecast' +
-      `?latitude=${CAMPUS.lat}&longitude=${CAMPUS.lng}` +
-      '&daily=weather_code,temperature_2m_max,temperature_2m_min' +
-      '&timezone=auto&forecast_days=2'
-    const res = await fetch(url)
-    const json = await res.json()
-    const daily = json.daily
-    const build = (i) => ({
-      date: daily.time[i],
-      code: daily.weather_code[i],
-      tMax: Math.round(daily.temperature_2m_max[i]),
-      tMin: Math.round(daily.temperature_2m_min[i])
-    })
-    today.value = build(0)
-    tomorrow.value = build(1)
-    tip.value = buildTip(today.value)
-  } catch {
-    failed.value = true
+    let data
+    if (props.useMock) {
+      data = getMockWeather(props.city)
+    } else {
+      data = await fetchRealWeather(props.city)
+    }
+    weather.value = data
+    emit('loaded', data)
+  } catch (e) {
+    ElMessage.warning(`天气获取失败：${e.message}`)
+    // 失败时回退到模拟数据
+    weather.value = getMockWeather(props.city)
   } finally {
     loading.value = false
   }
 }
 
+watch(() => props.city, () => loadWeather())
+
 onMounted(loadWeather)
 </script>
 
 <template>
-  <div class="weather-widget">
-    <!-- 收起态：右上角小图标条，点击展开 -->
-    <div v-if="!open" class="mini" title="点击查看天气与出行建议" @click="open = true">
-      <template v-if="!loading && !failed">
-        <span class="mini-icon">{{ describe(today.code)[1] }}</span>
-        <span class="mini-temp">{{ today.tMin }}~{{ today.tMax }}℃</span>
-      </template>
-      <span v-else-if="!loading" class="mini-icon">☁️</span>
-      <span v-else class="mini-temp">…</span>
+  <div class="weather-card" v-loading="loading">
+    <div class="weather-header">
+      <span class="city">📍 {{ weather.city }}</span>
+      <el-button text size="small" @click="loadWeather" :loading="loading">刷新</el-button>
     </div>
-
-    <!-- 展开态：今日 / 明日天气 + 出行建议 -->
-    <div v-else class="panel">
-      <div class="panel-head">
-        <b>校园天气</b>
-        <el-button text size="small" @click="open = false">收起</el-button>
-      </div>
-
-      <div v-if="loading" class="state">天气加载中…</div>
-      <div v-else-if="failed" class="state">
-        天气获取失败
-        <el-button text size="small" type="primary" @click="loadWeather">重试</el-button>
-      </div>
-      <template v-else>
-        <div v-for="(d, i) in [today, tomorrow]" :key="d.date" class="row">
-          <span class="day">{{ i === 0 ? '今天' : '明天' }}</span>
-          <span class="icon">{{ describe(d.code)[1] }}</span>
-          <span class="text">{{ describe(d.code)[0] }}</span>
-          <span class="temp">{{ d.tMin }}~{{ d.tMax }}℃</span>
+    <div class="weather-body">
+      <div class="weather-main">
+        <span class="weather-icon">{{ weather.icon }}</span>
+        <div class="temp-area">
+          <span class="temp">{{ weather.temp }}°</span>
+          <span class="text">{{ weather.text }}</span>
         </div>
-        <div class="tip">{{ tip }}</div>
-      </template>
+      </div>
+      <div class="weather-detail">
+        <div class="detail-item">
+          <span class="label">风向</span>
+          <span class="value">{{ weather.windDir }} {{ weather.windScale }}级</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">湿度</span>
+          <span class="value">{{ weather.humidity }}%</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.weather-widget {
-  position: fixed;
-  top: 64px; /* 顶部导航栏下方 */
-  right: 16px;
-  z-index: 2000;
+.weather-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 16px;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
-.mini {
+.weather-header {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 5px 10px;
-  background: #fff;
-  border: 1px solid #e4e7ed;
-  border-radius: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  cursor: pointer;
-  user-select: none;
-}
-
-.mini-icon {
-  font-size: 16px;
-}
-
-.mini-temp {
-  font-size: 12px;
-  color: #606266;
-}
-
-.panel {
-  width: 230px;
-  background: #fff;
-  border: 1px solid #e4e7ed;
-  border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  padding: 10px 14px;
-}
-
-.panel-head {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
-  color: #303133;
-  font-size: 14px;
+  align-items: center;
+  margin-bottom: 12px;
 }
 
-.row {
+.city {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.weather-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.weather-main {
   display: flex;
   align-items: center;
+  gap: 12px;
+}
+
+.weather-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.temp-area {
+  display: flex;
+  align-items: baseline;
   gap: 8px;
-  padding: 6px 0;
-  font-size: 13px;
-  color: #4b4b4b;
-}
-
-.day {
-  width: 34px;
-  color: #909399;
-}
-
-.icon {
-  font-size: 18px;
 }
 
 .temp {
-  margin-left: auto;
-  color: #303133;
+  font-size: 36px;
+  font-weight: 700;
 }
 
-.tip {
-  margin-top: 8px;
-  padding: 8px 10px;
-  background: #f0f7ff;
-  border-radius: 8px;
-  color: #1d6df0;
+.text {
+  font-size: 16px;
+  opacity: 0.9;
+}
+
+.weather-detail {
+  display: flex;
+  gap: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  padding-top: 10px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.label {
   font-size: 12px;
-  line-height: 1.6;
+  opacity: 0.7;
 }
 
-.state {
-  padding: 10px 0;
-  color: #909399;
-  font-size: 13px;
-  text-align: center;
+.value {
+  font-size: 14px;
 }
 </style>

@@ -16,5 +16,17 @@ export default defineConfig({
       '/api': { target: 'http://127.0.0.1:8000', changeOrigin: true },
       '/uploads': { target: 'http://127.0.0.1:8000', changeOrigin: true }
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // 分包策略：将大依赖拆分为独立 vendor chunk
+        manualChunks: {
+          'ol-vendor': ['ol'],
+          'element-plus': ['element-plus', '@element-plus/icons-vue'],
+          'vue-vendor': ['vue', 'vue-router', 'pinia']
+        }
+      }
+    }
   }
 })
