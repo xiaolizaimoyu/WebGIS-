@@ -4,11 +4,12 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import * as postApi from '@/api/post'
-import { TYPE_MAP, formatTime } from '@/api/const'
+import { formatTime } from '@/api/const'
+import { TYPE_MAP } from '@/api/typeMap' // B 扩展版：含美食分享 / 失物招领
 
 const router = useRouter()
 
-// 顶部 Tab：全部 + 四分类（value='all' 代表全部，请求时转 undefined）
+// 顶部 Tab：全部 + 六分类（value='all' 代表全部，请求时转 undefined）
 const tabs = [
   { value: 'all', label: '全部' },
   ...Object.entries(TYPE_MAP).map(([value, item]) => ({ value, label: item.label }))
