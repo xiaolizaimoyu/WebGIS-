@@ -15,6 +15,14 @@ const router = useRouter()
 const formRef = ref()
 const submitting = ref(false)
 
+// ===== 地图选点配置（归属：前端 B，《新增功能规划书》5-2 发帖拾取经纬度）=====
+// 高德 key 需在 https://lbs.amap.com 免费申请（Web端(JS API)类型）后填入；
+// 未配置 key 时自动降级为手动输入经纬度，不影响发布流程。
+const AMAP_KEY = ''
+// 校园中心坐标（示例为广州大学城，可改成本校坐标）
+const CAMPUS_CENTER = { lng: 113.3946, lat: 23.0392 }
+const hasKey = !!AMAP_KEY
+
 // 编辑模式：/publish/:id 存在 id 即为编辑
 const isEdit = computed(() => !!route.params.id)
 const editId = computed(() => (route.params.id ? Number(route.params.id) : null))
@@ -23,7 +31,9 @@ const form = reactive({
   title: '',
   body: '',
   type: 'activity',
-  category: ''
+  category: '',
+  longitude: null, // 经度，未选点为 null（后端 E 联调后入库，当前后端会忽略该字段）
+  latitude: null // 纬度
 })
 
 const rules = {
@@ -36,18 +46,82 @@ const fileList = ref([]) // el-upload 双向列表；新传成功 file.response=
 const previewVisible = ref(false)
 const previewUrl = ref('')
 
-// 编辑模式：拉取原内容回填表单与图片
+// 编辑模式：拉取原内容回填表单与图片（经纬度字段待后端 E 联调后返回）
 async function loadEditing() {
   const data = await postApi.getContent(editId.value)
   form.title = data.title
   form.body = data.body
   form.type = data.type
   form.category = data.category || ''
+  form.longitude = data.longitude ?? null
+  form.latitude = data.latitude ?? null
   fileList.value = (data.images || []).map((url) => ({ name: url.split('/').pop(), url }))
+  // 地图已就绪且原内容带坐标 → 在地图上标出原位置
+  if (mapReady.value && form.longitude != null) {
+    setPoint(form.longitude, form.latitude, false)
+  }
+}
+
+// ===== 高德地图动态加载 + 点击选点 =====
+const mapBox = ref(null) // 地图容器 DOM
+const mapReady = ref(false) // 地图是否渲染成功
+let map = null
+let marker = null
+
+// 按需注入高德 JS API 脚本（官方 callback 方式，避免污染 index.html）
+function loadAMap() {
+  return new Promise((resolve, reject) => {
+    if (window.AMap) return resolve(window.AMap)
+    const cbName = `__amap_cb_${Date.now()}`
+    window[cbName] = () => resolve(window.AMap)
+    const script = document.createElement('script')
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${AMAP_KEY}&callback=${cbName}`
+    script.onerror = () => reject(new Error('高德地图脚本加载失败'))
+    document.head.appendChild(script)
+  })
+}
+
+async function initMap() {
+  if (!hasKey || !mapBox.value) return
+  try {
+    await loadAMap()
+    map = new window.AMap.Map(mapBox.value, {
+      zoom: 16,
+      center: [CAMPUS_CENTER.lng, CAMPUS_CENTER.lat]
+    })
+    // 点击地图任意位置拾取坐标
+    map.on('click', (e) => setPoint(e.lnglat.lng, e.lnglat.lat))
+    mapReady.value = true
+  } catch (err) {
+    console.warn('高德地图加载失败，已降级为手动输入坐标：', err)
+  }
+}
+
+function setPoint(lng, lat, moveTo = true) {
+  form.longitude = Number(Number(lng).toFixed(6))
+  form.latitude = Number(Number(lat).toFixed(6))
+  if (!map) return
+  if (!marker) {
+    marker = new window.AMap.Marker({ position: [form.longitude, form.latitude] })
+    map.add(marker)
+  } else {
+    marker.setPosition([form.longitude, form.latitude])
+  }
+  if (moveTo) map.setCenter([form.longitude, form.latitude])
+}
+
+function clearPoint() {
+  form.longitude = null
+  form.latitude = null
+  if (marker && map) {
+    map.remove(marker)
+    marker = null
+  }
 }
 
 onMounted(() => {
   if (isEdit.value) loadEditing()
+  initMap()
 })
 
 // 自定义上传：替换默认 xhr，走我们的 /api/upload（已带 Token）
@@ -122,6 +196,9 @@ async function submit() {
             <el-radio-button value="meeting">校园会议</el-radio-button>
             <el-radio-button value="news">校园动态</el-radio-button>
             <el-radio-button value="ad">校园广告</el-radio-button>
+            <!-- 新增分类（规划书 5-2）：美食分享 / 失物招领 -->
+            <el-radio-button value="food">美食分享</el-radio-button>
+            <el-radio-button value="lost">失物招领</el-radio-button>
           </el-radio-group>
         </el-form-item>
 
@@ -184,5 +261,42 @@ async function submit() {
   color: #8c939d;
   font-size: 13px;
   line-height: 1.6;
+}
+
+.map-block {
+  width: 100%;
+}
+
+.map-box {
+  width: 100%;
+  height: 260px;
+  border-radius: 8px;
+  border: 1px solid #dcdfe6;
+  position: relative;
+  overflow: hidden;
+}
+
+.map-tip {
+  color: #909399;
+  font-size: 13px;
+}
+
+.map-box .map-tip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.map-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.map-manual {
+  display: flex;
+  gap: 10px;
 }
 </style>
