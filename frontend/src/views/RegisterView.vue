@@ -1,16 +1,32 @@
 <script setup>
-// 注册页（归属：前端 A）——账号注册模板
-// TODO(前端A)：昵称头像、密码强度、注册成功自动登录等扩展点
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as userApi from '@/api/user'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
+const route = useRoute()
+const store = useUserStore()
 
 const formRef = ref()
 const loading = ref(false)
+const submitted = ref(false)
 const form = reactive({ username: '', nickname: '', password: '', confirm: '' })
+
+const passwordStrength = computed(() => {
+  const pwd = form.password
+  if (!pwd) return { level: 0, label: '', color: '' }
+  let score = 0
+  if (pwd.length >= 8) score++
+  if (/[a-z]/.test(pwd)) score++
+  if (/[A-Z]/.test(pwd)) score++
+  if (/\d/.test(pwd)) score++
+  if (/[^a-zA-Z0-9]/.test(pwd)) score++
+  if (score <= 1) return { level: 1, label: '弱', color: '#f56c6c' }
+  if (score <= 3) return { level: 2, label: '中', color: '#e6a23c' }
+  return { level: 3, label: '强', color: '#67c23a' }
+})
 
 const rules = {
   username: [
@@ -35,9 +51,12 @@ const rules = {
 }
 
 async function submit() {
+  if (submitted.value || loading.value) return
+  submitted.value = true
   try {
     await formRef.value.validate()
   } catch {
+    submitted.value = false
     return
   }
   loading.value = true
@@ -47,12 +66,17 @@ async function submit() {
       nickname: form.nickname.trim(),
       password: form.password
     })
-    ElMessage.success('注册成功，请登录')
-    router.push('/login')
+    await store.login({
+      username: form.username.trim(),
+      password: form.password
+    })
+    ElMessage.success('注册成功，已自动登录')
+    const redirect = route.query.redirect
+    router.push(redirect ? String(redirect) : '/')
   } catch {
-    // 错误提示已由 request.js 统一弹出
   } finally {
     loading.value = false
+    submitted.value = false
   }
 }
 </script>
@@ -71,7 +95,15 @@ async function submit() {
           <el-input v-model="form.nickname" placeholder="昵称（展示给其他同学）" clearable />
         </el-form-item>
         <el-form-item prop="password">
-          <el-input v-model="form.password" type="password" placeholder="密码（至少 6 位）" show-password />
+          <el-input v-model="form.password" type="password" placeholder="密码（至少 6 位，越长越复杂越安全）" show-password />
+          <div v-if="form.password" class="pwd-strength">
+            <div class="bars">
+              <span class="bar" :class="{ active: passwordStrength.level >= 1 }" :style="{ background: passwordStrength.level >= 1 ? passwordStrength.color : '' }" />
+              <span class="bar" :class="{ active: passwordStrength.level >= 2 }" :style="{ background: passwordStrength.level >= 2 ? passwordStrength.color : '' }" />
+              <span class="bar" :class="{ active: passwordStrength.level >= 3 }" :style="{ background: passwordStrength.level >= 3 ? passwordStrength.color : '' }" />
+            </div>
+            <span class="label" :style="{ color: passwordStrength.color }">密码强度：{{ passwordStrength.label }}</span>
+          </div>
         </el-form-item>
         <el-form-item prop="confirm">
           <el-input v-model="form.confirm" type="password" placeholder="确认密码" show-password />
@@ -117,6 +149,28 @@ async function submit() {
   color: #909399;
   font-size: 13px;
   margin: 6px 0 22px;
+}
+
+.pwd-strength {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.pwd-strength .bars {
+  display: flex;
+  gap: 4px;
+}
+
+.pwd-strength .bar {
+  display: block;
+  width: 44px;
+  height: 6px;
+  border-radius: 3px;
+  background: #ebeef5;
+  transition: background 0.2s;
 }
 
 .submit-btn {
