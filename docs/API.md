@@ -24,10 +24,20 @@
 
 | 值 | 含义 | category 二级分类 |
 |---|---|---|
-| `activity` | 校园活动 | 可空 |
-| `meeting` | 校园会议 | 可空 |
-| `news` | 校园动态 | 可空 |
-| `ad` | 校园广告 | `闲置` / `求助` / `宣传` / 自定义 |
+| `activity` | 校园活动 | 不支持（传了会被忽略清空） |
+| `meeting` | 校园会议 | 不支持（传了会被忽略清空） |
+| `news` | 校园动态 | 不支持（传了会被忽略清空） |
+| `ad` | 校园广告 | `闲置` / `求助` / `宣传`（可空） |
+| `food` | 美食分享 | `食堂推荐` / `小吃外卖` / `零食饮品`（可空） |
+| `lost` | 失物招领 | `寻物启事` / `失主招领`（可空） |
+
+> category 非空时必须命中上表白名单，否则返回 `code: 2004`。
+
+## 数据字典：地理位置（WebGIS）
+
+- 内容可绑定地理位置：`longitude`（经度，-180~180）、`latitude`（纬度，-90~90），为发布时地图选点拾取的坐标（高德 gcj-02）。
+- 两个字段必须**成对提交**：都不传 = 不绑定位置（存 null）；只传一个返回 `code: 400`。
+- 所有内容查询接口（列表/我的发布/详情）都会返回这两个字段，无位置时为 `null`，前端地图只渲染非 null 的点位。
 
 ## 接口列表
 
@@ -64,19 +74,21 @@
 ### 内容发布与查询（后端 E）
 
 **POST /api/contents** — 发布内容（鉴权）
-请求体：`{ "title": "标题", "body": "正文", "type": "activity", "category": "闲置|...可空", "images": ["/uploads/a.png"] }`
+请求体：`{ "title": "标题", "body": "正文", "type": "activity|meeting|news|ad|food|lost", "category": "子分类，可空", "images": ["/uploads/a.png"], "longitude": 116.39742, "latitude": 39.90923 }`
+- `type` 不在六类之内返回 `code: 2002`；`category` 非空但不在白名单返回 `code: 2004`。
+- `longitude/latitude` 可空，必须成对传，只传一个返回 `code: 400`。
 成功 data：新内容完整对象。
 
-**GET /api/contents** — 内容列表（首页信息流）
-Query：`type`（可选，不传=全部）、`page`（默认1）、`size`（默认10）
-成功 data：`{ "total": 100, "items": [内容对象] }`（按发布时间倒序，含作者信息）
+**GET /api/contents** — 内容列表（首页信息流 / 地图点位）
+Query：`type`（可选，不传=全部，非法值返回 2002）、`page`（默认1）、`size`（默认10，最大100）、`has_location`（可选，`true` 时只返回绑定了经纬度的内容，供地图点位/热力图拉取）
+成功 data：`{ "total": 100, "items": [内容对象] }`（按发布时间倒序，含作者信息与经纬度）
 
 **GET /api/contents/mine** — 我的发布列表（鉴权）
 Query：`page`、`size`
 成功 data：`{ "total": N, "items": [...] }`，仅当前登录用户发布的内容，按时间倒序。
 
 **PUT /api/contents/{id}** — 编辑自己发布的内容（鉴权，仅作者本人）
-请求体：同发布 `{title, body, type, category?, images?}`（全量提交）
+请求体：同发布 `{title, body, type, category?, images?, longitude?, latitude?}`（全量提交，校验规则同发布）
 失败：非本人操作返回 `code: 2003`。
 
 **DELETE /api/contents/{id}** — 删除自己发布的内容（鉴权，仅作者本人）
@@ -105,11 +117,15 @@ Query：`page`、`size`
   "type": "activity",
   "category": null,
   "images": ["/uploads/x.png"],
+  "longitude": 116.39742,
+  "latitude": 39.90923,
   "author_id": 1,
   "author_name": "作者昵称",
   "created_at": "2026-09-02T12:00:00"
 }
 ```
+
+> `longitude/latitude` 未绑定位置时为 `null`。
 
 ## 业务错误码约定
 
@@ -122,4 +138,5 @@ Query：`page`、`size`
 | 2001 | 内容不存在 |
 | 2002 | 分类 type 不合法 |
 | 2003 | 只能编辑/删除自己发布的内容（非作者操作） |
-| 400 | 参数校验失败（msg 为具体原因） |
+| 2004 | 子分类 category 不合法（不在该类型白名单内） |
+| 400 | 参数校验失败（msg 为具体原因，如经纬度未成对提交） |

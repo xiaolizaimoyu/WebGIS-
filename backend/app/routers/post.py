@@ -27,6 +27,28 @@ router = APIRouter(prefix="/api", tags=["内容与评论"])
 # WebGIS 新增 food（美食分享）/ lost（失物招领）
 VALID_TYPES = {"activity", "meeting", "news", "ad", "food", "lost"}
 
+# 各一级分类允许的二级子分类（category）。
+# - 表中没有的类型（activity/meeting/news）不支持子分类，提交时统一清空；
+# - 表中的类型 category 可空；非空时必须命中白名单，保证地图/列表筛选数据规范。
+CATEGORY_RULES = {
+    "ad": ["闲置", "求助", "宣传"],
+    "food": ["食堂推荐", "小吃外卖", "零食饮品"],
+    "lost": ["寻物启事", "失主招领"],
+}
+
+
+def _normalize_category(content_type: str, category: Optional[str]) -> Optional[str]:
+    """子分类规整与校验：去空白；无子分类的类型清空；有白名单的类型校验合法性。"""
+    category = (category or "").strip()
+    allowed = CATEGORY_RULES.get(content_type)
+    if allowed is None:
+        return None
+    if not category:
+        return None
+    if category not in allowed:
+        raise BizError(2004, f"子分类 category 不合法，{content_type} 仅支持：{' / '.join(allowed)}")
+    return category
+
 
 def _normalize_location(longitude: Optional[float], latitude: Optional[float]):
     """经纬度成对校验：只传一个视为参数错误；都不传返回 (None, None)。"""
@@ -109,11 +131,12 @@ def create_content(
 ):
     _ensure_valid_type(data.type)
     longitude, latitude = _normalize_location(data.longitude, data.latitude)
+    category = _normalize_category(data.type, data.category)
     content = Content(
         title=data.title,
         body=data.body,
         type=data.type,
-        category=data.category,
+        category=category,
         images=data.images,
         longitude=longitude,
         latitude=latitude,
@@ -203,7 +226,7 @@ def update_content(
     content.title = data.title
     content.body = data.body
     content.type = data.type
-    content.category = data.category
+    content.category = _normalize_category(data.type, data.category)
     content.images = data.images
     content.longitude = longitude
     content.latitude = latitude
