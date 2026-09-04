@@ -24,7 +24,17 @@ from app.schemas import CommentIn, ContentIn
 router = APIRouter(prefix="/api", tags=["内容与评论"])
 
 # 内容一级分类，见 docs/API.md
-VALID_TYPES = {"activity", "meeting", "news", "ad"}
+# WebGIS 新增 food（美食分享）/ lost（失物招领）
+VALID_TYPES = {"activity", "meeting", "news", "ad", "food", "lost"}
+
+
+def _normalize_location(longitude: Optional[float], latitude: Optional[float]):
+    """经纬度成对校验：只传一个视为参数错误；都不传返回 (None, None)。"""
+    if longitude is None and latitude is None:
+        return None, None
+    if longitude is None or latitude is None:
+        raise BizError(400, "经纬度需成对提交（longitude 与 latitude 同时传或同时不传）")
+    return longitude, latitude
 
 
 def _ensure_valid_type(content_type: str) -> None:
@@ -42,6 +52,9 @@ def content_to_dict(content: Content, author_name: str) -> dict:
         "type": content.type,
         "category": content.category,
         "images": content.images or [],
+        # WebGIS：帖子绑定的地理位置，供前端地图渲染点位
+        "longitude": content.longitude,
+        "latitude": content.latitude,
         "author_id": content.author_id,
         "author_name": author_name,
         "created_at": content.created_at,
@@ -95,12 +108,15 @@ def create_content(
     user: User = Depends(get_current_user),
 ):
     _ensure_valid_type(data.type)
+    longitude, latitude = _normalize_location(data.longitude, data.latitude)
     content = Content(
         title=data.title,
         body=data.body,
         type=data.type,
         category=data.category,
         images=data.images,
+        longitude=longitude,
+        latitude=latitude,
         author_id=user.id,
     )
     session.add(content)
@@ -109,17 +125,22 @@ def create_content(
     return ok(content_to_dict(content, user.nickname), "发布成功")
 
 
-@router.get("/contents", summary="内容列表（首页信息流）")
+@router.get("/contents", summary="内容列表（首页信息流 / 地图点位）")
 def list_contents(
     type: Optional[str] = Query(default=None, description="按 type 筛选，不传为全部"),
     page: int = Query(default=1, ge=1),
-    size: int = Query(default=10, ge=1, le=50),
+    size: int = Query(default=10, ge=1, le=100),
+    has_location: bool = Query(default=False, description="WebGIS：仅返回绑定了经纬度的内容（地图点位用）"),
     session: Session = Depends(get_session),
 ):
     if type is not None and type not in VALID_TYPES:
         raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
 
     filters = [Content.type == type] if type else []
+    if has_location:
+        # 地图只渲染拾取过地理位置的帖子
+        filters.append(Content.longitude.is_not(None))
+        filters.append(Content.latitude.is_not(None))
     total = session.exec(select(func.count(Content.id)).where(*filters)).one()
     stmt = (
         select(Content)
@@ -178,11 +199,14 @@ def update_content(
     if content.author_id != user.id:
         raise BizError(2003, "只能编辑自己发布的内容")
     _ensure_valid_type(data.type)
+    longitude, latitude = _normalize_location(data.longitude, data.latitude)
     content.title = data.title
     content.body = data.body
     content.type = data.type
     content.category = data.category
     content.images = data.images
+    content.longitude = longitude
+    content.latitude = latitude
     session.add(content)
     session.commit()
     session.refresh(content)
