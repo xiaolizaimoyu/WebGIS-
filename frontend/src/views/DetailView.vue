@@ -27,6 +27,20 @@ async function loadComments() {
   comments.value = await postApi.listComments(contentId)
 }
 
+// 帖子带经纬度时展示「地图导航」入口（规划书 5-2：详情页导航按钮触发地图跳转定位）
+// 契约：携带坐标跳转到首页，前端 A 的地图组件读取 route.query 完成定位 / 模拟导航；
+// 地图组件未就绪时仅回到首页，不会报错。
+function toMapNav() {
+  router.push({
+    path: '/',
+    query: {
+      navLng: content.value.longitude,
+      navLat: content.value.latitude,
+      navTitle: content.value.title
+    }
+  })
+}
+
 async function sendComment() {
   if (!store.isLoggedIn) {
     ElMessage.warning('请先登录后再评论')
@@ -148,6 +162,13 @@ onMounted(() => {
   line-height: 1.9;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.nav-line {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .gallery {
