@@ -45,18 +45,6 @@ const routes = [
         meta: { title: '个人中心', requiresAuth: true }
       },
       {
-        path: 'publish/:id',
-        name: 'publish-edit',
-        component: () => import('@/views/PublishView.vue'),
-        meta: { title: '编辑内容', requiresAuth: true }
-      },
-      {
-        path: 'mine',
-        name: 'mine',
-        component: () => import('@/views/MineView.vue'),
-        meta: { title: '我的发布', requiresAuth: true }
-      },
-      {
         path: 'content/:id',
         name: 'detail',
         component: () => import('@/views/DetailView.vue'),
