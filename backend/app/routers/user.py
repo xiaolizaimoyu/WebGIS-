@@ -113,6 +113,37 @@ def _clear_login_failure(username: str, ip: str) -> None:
     _login_failures.pop(f"{username}:{ip}", None)
 
 
+# ---------- 接口请求体模型（本模块内联定义，不依赖后端F的 schemas.py） ----------
+class RegisterConfirmIn(RegisterIn):
+    """注册请求体：在 RegisterIn 基础上增加确认密码字段。"""
+
+    confirm_password: str = Field(min_length=1, max_length=64, description="再次输入密码")
+
+
+class ChangePasswordConfirmIn(ChangePasswordIn):
+    """改密码请求体：在 ChangePasswordIn 基础上增加确认新密码字段。"""
+
+    confirm_password: str = Field(min_length=1, max_length=64, description="再次输入新密码")
+
+
+class ChangeUsernameIn(BaseModel):
+    """修改用户名请求体：需密码确认，新用户名遵守白名单。"""
+
+    new_username: str = Field(
+        min_length=2,
+        max_length=30,
+        pattern=r"^[a-zA-Z0-9_-]+$",
+        description="新登录账号，2-30位，仅字母数字下划线中横线",
+    )
+    password: str = Field(min_length=1, max_length=64, description="当前密码确认")
+
+
+class DeleteAccountIn(BaseModel):
+    """注销账号请求体：需二次输入密码确认。"""
+
+    password: str = Field(min_length=1, max_length=64, description="当前密码确认")
+
+
 def user_public(user: User) -> dict:
     """对外暴露的用户信息（去掉密码哈希），注册/登录/me/更新资料共用同一结构。"""
     return {
@@ -125,7 +156,9 @@ def user_public(user: User) -> dict:
 
 
 @router.post("/register", summary="注册")
-def register(data: RegisterIn, request: Request, session: Session = Depends(get_session)):
+def register(data: RegisterConfirmIn, request: Request, session: Session = Depends(get_session)):
+    if data.password != data.confirm_password:
+        raise BizError(1009, "两次输入的密码不一致")
     exists = session.exec(select(User).where(User.username == data.username)).first()
     if exists:
         raise BizError(1002, "该用户名已被注册")
@@ -231,7 +264,7 @@ def update_profile(
 
 @router.put("/password", summary="修改密码")
 def change_password(
-    data: ChangePasswordIn,
+    data: ChangePasswordConfirmIn,
     request: Request,
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
@@ -240,6 +273,8 @@ def change_password(
         raise BizError(1003, "原密码不正确")
     if data.old_password == data.new_password:
         raise BizError(1006, "新密码不能与原密码相同")
+    if data.new_password != data.confirm_password:
+        raise BizError(1009, "两次输入的新密码不一致")
     weak_msg = _validate_password_strength(data.new_password, user.username)
     if weak_msg:
         raise BizError(1008, weak_msg)
@@ -251,24 +286,6 @@ def change_password(
     blacklist_token(token)
     logger.info("修改密码成功 user_id=%s ip=%s", user.id, _client_ip(request))
     return ok(None, "密码修改成功，请用新密码重新登录")
-
-
-class DeleteAccountIn(BaseModel):
-    """注销账号请求体：需二次输入密码确认。"""
-
-    password: str = Field(min_length=1, max_length=64, description="当前密码确认")
-
-
-class ChangeUsernameIn(BaseModel):
-    """修改用户名请求体：需密码确认，新用户名遵守白名单。"""
-
-    new_username: str = Field(
-        min_length=2,
-        max_length=30,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="新登录账号，2-30位，仅字母数字下划线中横线",
-    )
-    password: str = Field(min_length=1, max_length=64, description="当前密码确认")
 
 
 @router.patch("/me/username", summary="修改用户名")
