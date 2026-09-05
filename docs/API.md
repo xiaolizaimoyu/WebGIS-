@@ -34,28 +34,29 @@
 ### 用户认证（后端 D）
 
 **POST /api/user/register** — 注册
-请求体：`{ "username": "学号或用户名", "nickname": "昵称", "password": "至少6位" }`
-成功 data：`{ "token": "...", "user": {id, username, nickname, avatar, created_at} }`（注册即登录）
+请求体：`{ "username": "2-30位字母数字下划线中横线", "nickname": "昵称", "password": "至少8位含字母和数字", "confirm_password": "再次输入密码" }`
+成功 data：`{ "token": "...", "expires_in": 604800, "user": {...} }`（注册即登录）
+错误：用户名被占用 `code: 1002`；密码强度不足 `code: 1008`；两次密码不一致 `code: 1009`。
 
 **POST /api/user/login** — 登录
 请求体：`{ "username": "", "password": "" }`
-成功 data：`{ "token": "...", "user": {id, username, nickname, avatar, created_at} }`
-错误：用户名或密码错误返回 `code: 1001`；连续失败 5 次锁定 15 分钟返回 `code: 1004`。
+成功 data：`{ "token": "...", "expires_in": 604800, "user": {...} }`
+错误：用户名或密码错误 `code: 1001`；连续失败 5 次锁定 15 分钟 `code: 1004`。
 
 **POST /api/user/logout** — 登出（鉴权）
 成功 data：`null`。当前 token 立即失效（加入黑名单）。
 
 **GET /api/user/me** — 获取当前登录用户（鉴权）
-成功 data：`{id, username, nickname, avatar, created_at}`
+成功 data：`{id, username, nickname, avatar, created_at, content_count, comment_count}`
 
 **PUT /api/user/me** — 更新个人资料（鉴权）
 请求体：`{ "nickname": "新昵称(可空)", "avatar": "头像URL(可空, 空串=清除)" }`
 成功 data：更新后的用户信息。
 
 **PUT /api/user/password** — 修改密码（鉴权）
-请求体：`{ "old_password": "", "new_password": "至少6位" }`
+请求体：`{ "old_password": "", "new_password": "至少8位含字母和数字", "confirm_password": "再次输入新密码" }`
 成功 data：`null`。原 token 立即失效，需用新密码重新登录。
-错误：原密码错误 `code: 1003`；新旧相同 `code: 1006`。
+错误：原密码错误 `code: 1003`；新旧相同 `code: 1006`；密码强度不足 `code: 1008`；两次不一致 `code: 1009`。
 
 **PATCH /api/user/me/username** — 修改用户名（鉴权）
 请求体：`{ "new_username": "新用户名", "password": "当前密码确认" }`
@@ -71,8 +72,12 @@
 成功 data：`{ "available": true/false, "username": "xxx" }`
 
 **GET /api/user/{user_id}** — 按 ID 查询用户公开信息
-成功 data：`{id, username, nickname, avatar, created_at}`
+成功 data：`{id, username, nickname, avatar, created_at, content_count, comment_count}`
 错误：用户不存在 `code: 1005`。
+
+**POST /api/user/batch** — 批量查询用户公开信息
+请求体：`{ "ids": [1, 2, 3] }`（单次最多 100 个）
+成功 data：`{ "list": [{id, username, nickname, avatar, created_at}] }`，不存在的 id 自动跳过。
 
 **GET /api/user/list** — 用户列表（分页）
 Query：`page`（默认1）、`page_size`（默认20，上限100）、`keyword`（按用户名/昵称模糊搜索）
