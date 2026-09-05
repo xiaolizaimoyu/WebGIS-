@@ -121,11 +121,12 @@ Query：`page`、`size`
   "latitude": 39.90923,
   "author_id": 1,
   "author_name": "作者昵称",
+  "comment_count": 3,
   "created_at": "2026-09-02T12:00:00"
 }
 ```
 
-> `longitude/latitude` 未绑定位置时为 `null`。
+> `longitude/latitude` 未绑定位置时为 `null`；`comment_count` 为该内容的评论总数（列表/详情均返回）。
 
 ## 业务错误码约定
 
