@@ -132,15 +132,6 @@ def check_username(username: str, session: Session = Depends(get_session)):
     return ok({"available": exists is None, "username": username})
 
 
-@router.get("/{user_id}", summary="按 ID 查询用户公开信息")
-def get_user(user_id: int, session: Session = Depends(get_session)):
-    """供内容模块展示作者昵称/头像使用，不返回敏感字段。"""
-    user = session.get(User, user_id)
-    if user is None:
-        raise BizError(1005, "用户不存在")
-    return ok(user_public(user))
-
-
 @router.get("/list", summary="用户列表（分页）")
 def list_users(
     page: int = 1,
@@ -296,3 +287,37 @@ def delete_account(
         raise BizError(1007, "存在关联内容或评论，无法直接注销，请联系管理员")
     logger.warning("账号注销 user_id=%s ip=%s", user.id, _client_ip(request))
     return ok(None, "账号已注销")
+
+
+@router.get("/stats", summary="用户统计")
+def user_stats(
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """返回用户相关统计，供后台/数据分析使用（需登录）。"""
+    from datetime import datetime, timedelta
+
+    all_users = session.exec(select(User)).all()
+    now = datetime.now()
+    today_start = datetime(now.year, now.month, now.day)
+    week_start = today_start - timedelta(days=today_start.weekday())
+    today_new = sum(1 for u in all_users if u.created_at >= today_start)
+    week_new = sum(1 for u in all_users if u.created_at >= week_start)
+    return ok({
+        "total_users": len(all_users),
+        "today_new": today_new,
+        "week_new": week_new,
+    })
+
+
+@router.get("/{user_id}", summary="按 ID 查询用户公开信息")
+def get_user(user_id: int, session: Session = Depends(get_session)):
+    """供内容模块展示作者昵称/头像使用，不返回敏感字段。
+
+    注意：动态路径 {user_id} 必须放在所有静态路径(/list /stats 等)之后，
+    否则 FastAPI 会把 list/stats 当成 user_id 匹配。
+    """
+    user = session.get(User, user_id)
+    if user is None:
+        raise BizError(1005, "用户不存在")
+    return ok(user_public(user))
