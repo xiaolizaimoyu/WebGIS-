@@ -12,7 +12,13 @@ from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session, select
 
 from app.core.response import BizError, ok
-from app.core.security import create_token, get_current_user, hash_password, verify_password
+from app.core.security import (
+    blacklist_token,
+    create_token,
+    get_current_user,
+    hash_password,
+    verify_password,
+)
 from app.db import get_session
 from app.models import User
 from app.schemas import ChangePasswordIn, LoginIn, ProfileUpdateIn, RegisterIn
@@ -118,6 +124,31 @@ def me(user: User = Depends(get_current_user)):
     return ok(user_public(user))
 
 
+@router.get("/check-username", summary="检查用户名是否可用")
+def check_username(username: str, session: Session = Depends(get_session)):
+    """注册时实时校验用户名是否已被占用。"""
+    exists = session.exec(select(User).where(User.username == username)).first()
+    return ok({"available": exists is None, "username": username})
+
+
+@router.get("/{user_id}", summary="按 ID 查询用户公开信息")
+def get_user(user_id: int, session: Session = Depends(get_session)):
+    """供内容模块展示作者昵称/头像使用，不返回敏感字段。"""
+    user = session.get(User, user_id)
+    if user is None:
+        raise BizError(1005, "用户不存在")
+    return ok(user_public(user))
+
+
+@router.post("/logout", summary="登出")
+def logout(request: Request, user: User = Depends(get_current_user)):
+    """将当前 token 加入黑名单，使其立即失效。"""
+    token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    blacklist_token(token)
+    logger.info("用户登出 user_id=%s ip=%s", user.id, _client_ip(request))
+    return ok(None, "已退出登录")
+
+
 @router.put("/me", summary="更新个人资料（昵称/头像）")
 def update_profile(
     data: ProfileUpdateIn,
@@ -144,8 +175,13 @@ def change_password(
 ):
     if not verify_password(data.old_password, user.password_hash):
         raise BizError(1003, "原密码不正确")
+    if data.old_password == data.new_password:
+        raise BizError(1006, "新密码不能与原密码相同")
     user.password_hash = hash_password(data.new_password)
     session.add(user)
     session.commit()
+    # 改密码后吊销当前 token，前端需用新密码重新登录
+    token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    blacklist_token(token)
     logger.info("修改密码成功 user_id=%s ip=%s", user.id, _client_ip(request))
-    return ok(None, "密码修改成功，下次请用新密码登录")
+    return ok(None, "密码修改成功，请用新密码重新登录")
