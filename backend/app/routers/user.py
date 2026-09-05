@@ -9,6 +9,7 @@ import logging
 import time
 
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.core.response import BizError, ok
@@ -214,3 +215,37 @@ def change_password(
     blacklist_token(token)
     logger.info("修改密码成功 user_id=%s ip=%s", user.id, _client_ip(request))
     return ok(None, "密码修改成功，请用新密码重新登录")
+
+
+class DeleteAccountIn(BaseModel):
+    """注销账号请求体：需二次输入密码确认。"""
+
+    password: str = Field(min_length=1, max_length=64, description="当前密码确认")
+
+
+@router.delete("/me", summary="注销账号")
+def delete_account(
+    data: DeleteAccountIn,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """注销当前账号，需二次输入密码确认。
+
+    注：物理删除用户记录。若用户已发布内容/评论，外键约束会阻止删除，
+    此处先校验密码，删除失败时返回明确提示。
+    """
+    if not verify_password(data.password, user.password_hash):
+        raise BizError(1003, "密码不正确，无法注销")
+    # 吊销当前 token
+    token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    blacklist_token(token)
+    try:
+        session.delete(user)
+        session.commit()
+    except Exception:
+        session.rollback()
+        logger.warning("注销失败(存在关联数据) user_id=%s ip=%s", user.id, _client_ip(request))
+        raise BizError(1007, "存在关联内容或评论，无法直接注销，请联系管理员")
+    logger.warning("账号注销 user_id=%s ip=%s", user.id, _client_ip(request))
+    return ok(None, "账号已注销")
