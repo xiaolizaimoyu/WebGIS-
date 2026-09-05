@@ -79,13 +79,16 @@
 - `longitude/latitude` 可空，必须成对传，只传一个返回 `code: 400`。
 成功 data：新内容完整对象。
 
-**GET /api/contents** — 内容列表（首页信息流 / 地图点位）
-Query：`type`（可选，不传=全部，非法值返回 2002）、`page`（默认1）、`size`（默认10，最大100）、`has_location`（可选，`true` 时只返回绑定了经纬度的内容，供地图点位/热力图拉取）
-成功 data：`{ "total": 100, "items": [内容对象] }`（按发布时间倒序，含作者信息与经纬度）
+**GET /api/contents** — 内容列表（首页信息流 / 地图点位 / 搜索 / 热门排序）
+Query：`type`（可选，不传=全部，非法值返回 2002）、`keyword`（可选，≤50 字符，模糊匹配标题或正文）、`sort`（可选，`latest`默认按时间倒序 / `hot`按评论数降序，非法值返回 400）、`page`（默认1）、`size`（默认10，最大100）、`has_location`（可选，`true` 时只返回绑定了经纬度的内容，供地图点位/热力图拉取）
+成功 data：`{ "total": 100, "total_pages": 10, "items": [内容对象] }`（含作者信息、经纬度与评论数）
 
 **GET /api/contents/mine** — 我的发布列表（鉴权）
-Query：`page`、`size`
-成功 data：`{ "total": N, "items": [...] }`，仅当前登录用户发布的内容，按时间倒序。
+Query：`type`（可选，不传=全部，非法值返回 2002）、`page`、`size`
+成功 data：`{ "total": N, "total_pages": M, "items": [...] }`，仅当前登录用户发布的内容，按时间倒序。
+
+**GET /api/contents/stats** — 内容统计（按分类汇总，无需鉴权）
+成功 data：`{ "total": 15, "by_type": {"activity": 3, "ad": 2, "food": 5, "lost": 1, "meeting": 1, "news": 3} }`，供首页仪表盘/分类导航使用。
 
 **PUT /api/contents/{id}** — 编辑自己发布的内容（鉴权，仅作者本人）
 请求体：同发布 `{title, body, type, category?, images?, longitude?, latitude?}`（全量提交，校验规则同发布）
@@ -106,6 +109,10 @@ Query：`page`、`size`
 **POST /api/contents/{id}/comments** — 发表评论（鉴权）
 请求体：`{ "body": "评论内容" }`
 成功 data：新评论对象。
+
+**DELETE /api/contents/{id}/comments/{comment_id}** — 删除评论（鉴权，仅作者本人）
+成功 data：`{ "id": comment_id, "deleted": true }`。
+失败：非本人评论返回 `code: 2003`；评论/内容不存在返回 `code: 2001`。
 
 ## 内容对象结构
 
