@@ -166,6 +166,7 @@ def create_content(
 def list_contents(
     type: Optional[str] = Query(default=None, description="按 type 筛选，不传为全部"),
     keyword: Optional[str] = Query(default=None, max_length=50, description="关键词搜索：匹配标题或正文，不传为不搜索"),
+    sort: str = Query(default="latest", description="排序：latest(默认,按时间倒序) | hot(按评论数降序)"),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, ge=1, le=100),
     has_location: bool = Query(default=False, description="WebGIS：仅返回绑定了经纬度的内容（地图点位用）"),
@@ -173,6 +174,8 @@ def list_contents(
 ):
     if type is not None and type not in VALID_TYPES:
         raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
+    if sort not in ("latest", "hot"):
+        raise BizError(400, "排序参数 sort 仅支持：latest | hot")
 
     filters = [Content.type == type] if type else []
     keyword = (keyword or "").strip()
@@ -183,20 +186,46 @@ def list_contents(
         filters.append(Content.longitude.is_not(None))
         filters.append(Content.latitude.is_not(None))
     total = session.exec(select(func.count(Content.id)).where(*filters)).one()
-    stmt = (
-        select(Content)
-        .where(*filters)
-        .order_by(Content.created_at.desc(), Content.id.desc())
-        .offset((page - 1) * size)
-        .limit(size)
-    )
-    items = session.exec(stmt).all()
+    if sort == "hot":
+        # 热门排序：先按评论数降序，再按时间降序稳定排
+        count_sub = (
+            select(Comment.content_id, func.count(Comment.id).label("cc"))
+            .group_by(Comment.content_id)
+            .subquery()
+        )
+        stmt = (
+            select(Content, func.coalesce(count_sub.c.cc, 0).label("comment_count"))
+            .outerjoin(count_sub, count_sub.c.content_id == Content.id)
+            .where(*filters)
+            .order_by(func.coalesce(count_sub.c.cc, 0).desc(), Content.created_at.desc(), Content.id.desc())
+            .offset((page - 1) * size)
+            .limit(size)
+        )
+        rows = session.exec(stmt).all()
+        items = [r[0] for r in rows]
+        # 热门排序时 comment_count 从子查询已拿到，直接用
+        hot_counts = {r[0].id: r[1] for r in rows}
+    else:
+        stmt = (
+            select(Content)
+            .where(*filters)
+            .order_by(Content.created_at.desc(), Content.id.desc())
+            .offset((page - 1) * size)
+            .limit(size)
+        )
+        items = session.exec(stmt).all()
+        hot_counts = None
     name_map = users_nickname_map(session, [c.author_id for c in items])
     count_map = comments_count_map(session, [c.id for c in items])
     return ok({
         "total": total,
+        "total_pages": (total + size - 1) // size,
         "items": [
-            content_to_dict(c, name_map.get(c.author_id, "未知用户"), count_map.get(c.id, 0))
+            content_to_dict(
+                c,
+                name_map.get(c.author_id, "未知用户"),
+                hot_counts.get(c.id, count_map.get(c.id, 0)) if hot_counts else count_map.get(c.id, 0),
+            )
             for c in items
         ],
     })
@@ -235,8 +264,23 @@ def list_my_contents(
     count_map = comments_count_map(session, [c.id for c in items])
     return ok({
         "total": total,
+        "total_pages": (total + size - 1) // size,
         "items": [content_to_dict(c, user.nickname, count_map.get(c.id, 0)) for c in items],
     })
+
+
+@router.get("/contents/stats", summary="内容统计（按分类汇总）")
+def content_stats(session: Session = Depends(get_session)):
+    """返回各分类的内容数量，供首页仪表盘 / 分类导航使用。"""
+    rows = session.exec(
+        select(Content.type, func.count(Content.id)).group_by(Content.type)
+    ).all()
+    by_type = {t: 0 for t in sorted(VALID_TYPES)}
+    total = 0
+    for t, c in rows:
+        by_type[t] = c
+        total += c
+    return ok({"total": total, "by_type": by_type})
 
 
 @router.put("/contents/{content_id}", summary="编辑自己发布的内容（需登录）")
@@ -326,3 +370,23 @@ def create_comment(
     session.commit()
     session.refresh(comment)
     return ok(comment_to_dict(comment, user.nickname), "评论成功")
+
+
+@router.delete("/contents/{content_id}/comments/{comment_id}", summary="删除评论（需登录）")
+def delete_comment(
+    content_id: int,
+    comment_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """删除自己的评论；非作者返回 2003；评论或内容不存在返回 2001。"""
+    if session.get(Content, content_id) is None:
+        raise BizError(2001, "内容不存在或已被删除")
+    comment = session.get(Comment, comment_id)
+    if comment is None or comment.content_id != content_id:
+        raise BizError(2001, "评论不存在或已被删除")
+    if comment.author_id != user.id:
+        raise BizError(2003, "只能删除自己发表的评论")
+    session.delete(comment)
+    session.commit()
+    return ok({"id": comment_id, "deleted": True}, "删除成功")
