@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from app.core.config import ALLOWED_IMAGE_EXTENSIONS, MAX_IMAGE_SIZE, UPLOAD_DIR
@@ -66,7 +66,7 @@ def _ensure_valid_type(content_type: str) -> None:
 
 
 # ---------- 序列化辅助 ----------
-def content_to_dict(content: Content, author_name: str) -> dict:
+def content_to_dict(content: Content, author_name: str, comment_count: int = 0) -> dict:
     return {
         "id": content.id,
         "title": content.title,
@@ -79,6 +79,7 @@ def content_to_dict(content: Content, author_name: str) -> dict:
         "latitude": content.latitude,
         "author_id": content.author_id,
         "author_name": author_name,
+        "comment_count": comment_count,
         "created_at": content.created_at,
     }
 
@@ -101,6 +102,19 @@ def users_nickname_map(session: Session, ids: List[int]) -> dict:
         return {}
     rows = session.exec(select(User).where(User.id.in_(ids))).all()
     return {u.id: u.nickname for u in rows}
+
+
+def comments_count_map(session: Session, content_ids: List[int]) -> dict:
+    """按内容 id 批量统计评论数，返回 {content_id: comment_count}。"""
+    ids = list(set(content_ids))
+    if not ids:
+        return {}
+    rows = session.exec(
+        select(Comment.content_id, func.count(Comment.id))
+        .where(Comment.content_id.in_(ids))
+        .group_by(Comment.content_id)
+    ).all()
+    return {content_id: count for content_id, count in rows}
 
 
 # ---------- 图片上传 ----------
@@ -148,9 +162,10 @@ def create_content(
     return ok(content_to_dict(content, user.nickname), "发布成功")
 
 
-@router.get("/contents", summary="内容列表（首页信息流 / 地图点位）")
+@router.get("/contents", summary="内容列表（首页信息流 / 地图点位 / 搜索）")
 def list_contents(
     type: Optional[str] = Query(default=None, description="按 type 筛选，不传为全部"),
+    keyword: Optional[str] = Query(default=None, max_length=50, description="关键词搜索：匹配标题或正文，不传为不搜索"),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, ge=1, le=100),
     has_location: bool = Query(default=False, description="WebGIS：仅返回绑定了经纬度的内容（地图点位用）"),
@@ -160,6 +175,9 @@ def list_contents(
         raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
 
     filters = [Content.type == type] if type else []
+    keyword = (keyword or "").strip()
+    if keyword:
+        filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
     if has_location:
         # 地图只渲染拾取过地理位置的帖子
         filters.append(Content.longitude.is_not(None))
@@ -174,14 +192,19 @@ def list_contents(
     )
     items = session.exec(stmt).all()
     name_map = users_nickname_map(session, [c.author_id for c in items])
+    count_map = comments_count_map(session, [c.id for c in items])
     return ok({
         "total": total,
-        "items": [content_to_dict(c, name_map.get(c.author_id, "未知用户")) for c in items],
+        "items": [
+            content_to_dict(c, name_map.get(c.author_id, "未知用户"), count_map.get(c.id, 0))
+            for c in items
+        ],
     })
 
 
 @router.get("/contents/mine", summary="我的发布列表（需登录）")
 def list_my_contents(
+    type: Optional[str] = Query(default=None, description="按 type 筛选，不传为全部"),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, ge=1, le=50),
     session: Session = Depends(get_session),
@@ -192,20 +215,27 @@ def list_my_contents(
     注意：/contents/mine 必须声明在 /contents/{content_id} 之前，
     否则 "mine" 会被当成 id 解析而报 422。
     """
+    if type is not None and type not in VALID_TYPES:
+        raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
+
+    filters = [Content.author_id == user.id]
+    if type:
+        filters.append(Content.type == type)
     total = session.exec(
-        select(func.count(Content.id)).where(Content.author_id == user.id)
+        select(func.count(Content.id)).where(*filters)
     ).one()
     stmt = (
         select(Content)
-        .where(Content.author_id == user.id)
+        .where(*filters)
         .order_by(Content.created_at.desc(), Content.id.desc())
         .offset((page - 1) * size)
         .limit(size)
     )
     items = session.exec(stmt).all()
+    count_map = comments_count_map(session, [c.id for c in items])
     return ok({
         "total": total,
-        "items": [content_to_dict(c, user.nickname) for c in items],
+        "items": [content_to_dict(c, user.nickname, count_map.get(c.id, 0)) for c in items],
     })
 
 
@@ -262,7 +292,10 @@ def get_content(content_id: int, session: Session = Depends(get_session)):
     if content is None:
         raise BizError(2001, "内容不存在或已被删除")
     author = session.get(User, content.author_id)
-    return ok(content_to_dict(content, author.nickname if author else "未知用户"))
+    comment_count = session.exec(
+        select(func.count(Comment.id)).where(Comment.content_id == content.id)
+    ).one()
+    return ok(content_to_dict(content, author.nickname if author else "未知用户", comment_count))
 
 
 # ---------- 评论 ----------
