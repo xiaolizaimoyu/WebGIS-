@@ -111,6 +111,7 @@ Query：`page`（默认1）、`size`（默认20，最大100）
 **POST /api/contents/{id}/comments** — 发表评论（鉴权）
 请求体：`{ "body": "评论内容" }`
 成功 data：新评论对象。
+失败：`body` 为纯空白返回 `code: 400`。
 
 **DELETE /api/contents/{id}/comments/{comment_id}** — 删除评论（鉴权，仅作者本人）
 成功 data：`{ "id": comment_id, "deleted": true }`。

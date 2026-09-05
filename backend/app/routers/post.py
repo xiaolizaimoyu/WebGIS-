@@ -71,6 +71,14 @@ def _validate_optional_type(content_type: Optional[str]) -> None:
         raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
 
 
+def _clean_text(value: str, field_name: str) -> str:
+    """去首尾空白并拒绝纯空白输入（标题 / 正文 / 评论共用）。"""
+    value = value.strip()
+    if not value:
+        raise BizError(400, f"{field_name}不能为空白")
+    return value
+
+
 def _get_optional_user(request: Request, session: Session) -> Optional[User]:
     """从 Authorization 头尝试解析用户，未登录或 token 无效返回 None（不报错）。"""
     auth = request.headers.get("Authorization", "")
@@ -169,15 +177,9 @@ def create_content(
     _ensure_valid_type(data.type)
     longitude, latitude = _normalize_location(data.longitude, data.latitude)
     category = _normalize_category(data.type, data.category)
-    title = data.title.strip()
-    body = data.body.strip()
-    if not title:
-        raise BizError(400, "标题不能为空白")
-    if not body:
-        raise BizError(400, "正文不能为空白")
     content = Content(
-        title=title,
-        body=body,
+        title=_clean_text(data.title, "标题"),
+        body=_clean_text(data.body, "正文"),
         type=data.type,
         category=category,
         images=data.images,
@@ -202,8 +204,7 @@ def list_contents(
     author_id: Optional[int] = Query(default=None, description="按作者 id 筛选，不传为全部"),
     session: Session = Depends(get_session),
 ):
-    if type is not None and type not in VALID_TYPES:
-        raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
+    _validate_optional_type(type)
     if sort not in ("latest", "hot"):
         raise BizError(400, "排序参数 sort 仅支持：latest | hot")
 
@@ -235,8 +236,9 @@ def list_contents(
         )
         rows = session.exec(stmt).all()
         items = [r[0] for r in rows]
-        # 热门排序时 comment_count 从子查询已拿到，直接用
+        # 热门排序时子查询已带回全部评论数，无需再查 count_map
         hot_counts = {r[0].id: r[1] for r in rows}
+        count_map = {}
     else:
         stmt = (
             select(Content)
@@ -247,8 +249,8 @@ def list_contents(
         )
         items = session.exec(stmt).all()
         hot_counts = None
+        count_map = comments_count_map(session, [c.id for c in items])
     name_map = users_nickname_map(session, [c.author_id for c in items])
-    count_map = comments_count_map(session, [c.id for c in items])
     return ok({
         "total": total,
         "total_pages": (total + size - 1) // size,
@@ -256,7 +258,7 @@ def list_contents(
             content_to_dict(
                 c,
                 name_map.get(c.author_id, "未知用户"),
-                hot_counts.get(c.id, count_map.get(c.id, 0)) if hot_counts else count_map.get(c.id, 0),
+                hot_counts.get(c.id, 0) if hot_counts else count_map.get(c.id, 0),
             )
             for c in items
         ],
@@ -328,14 +330,8 @@ def update_content(
         raise BizError(2003, "只能编辑自己发布的内容")
     _ensure_valid_type(data.type)
     longitude, latitude = _normalize_location(data.longitude, data.latitude)
-    title = data.title.strip()
-    body = data.body.strip()
-    if not title:
-        raise BizError(400, "标题不能为空白")
-    if not body:
-        raise BizError(400, "正文不能为空白")
-    content.title = title
-    content.body = body
+    content.title = _clean_text(data.title, "标题")
+    content.body = _clean_text(data.body, "正文")
     content.type = data.type
     content.category = _normalize_category(data.type, data.category)
     content.images = data.images
@@ -386,7 +382,7 @@ def get_content(content_id: int, request: Request, session: Session = Depends(ge
     ).one()
     # 可选鉴权：已登录时返回 is_author，前端据此显示编辑/删除按钮
     current_user = _get_optional_user(request, session)
-    is_author = (current_user is not None and content.author_id == current_user.id) if current_user is not None else None
+    is_author = content.author_id == current_user.id if current_user is not None else None
     return ok(content_to_dict(content, author.nickname if author else "未知用户", comment_count, is_author))
 
 
@@ -427,7 +423,7 @@ def create_comment(
 ):
     if session.get(Content, content_id) is None:
         raise BizError(2001, "内容不存在或已被删除")
-    comment = Comment(content_id=content_id, author_id=user.id, body=data.body.strip())
+    comment = Comment(content_id=content_id, author_id=user.id, body=_clean_text(data.body, "评论内容"))
     session.add(comment)
     session.commit()
     session.refresh(comment)
