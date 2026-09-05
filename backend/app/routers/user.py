@@ -21,7 +21,7 @@ from app.core.security import (
     verify_password,
 )
 from app.db import get_session
-from app.models import User
+from app.models import Comment, Content, User
 from app.schemas import ChangePasswordIn, LoginIn, ProfileUpdateIn, RegisterIn
 
 router = APIRouter(prefix="/api/user", tags=["用户认证"])
@@ -161,6 +161,22 @@ def user_public(user: User) -> dict:
     }
 
 
+def user_detail(user: User, session: Session) -> dict:
+    """用户公开信息 + 发布内容数/评论数（个人主页用）。"""
+    from sqlalchemy import func
+
+    content_count = session.exec(
+        select(func.count()).select_from(Content).where(Content.author_id == user.id)
+    ).one()
+    comment_count = session.exec(
+        select(func.count()).select_from(Comment).where(Comment.author_id == user.id)
+    ).one()
+    data = user_public(user)
+    data["content_count"] = content_count
+    data["comment_count"] = comment_count
+    return data
+
+
 @router.post("/register", summary="注册")
 def register(data: RegisterConfirmIn, request: Request, session: Session = Depends(get_session)):
     if data.password != data.confirm_password:
@@ -202,8 +218,8 @@ def login(data: LoginIn, request: Request, session: Session = Depends(get_sessio
 
 
 @router.get("/me", summary="当前登录用户")
-def me(user: User = Depends(get_current_user)):
-    return ok(user_public(user))
+def me(session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+    return ok(user_detail(user, session))
 
 
 @router.get("/check-username", summary="检查用户名是否可用")
@@ -393,10 +409,11 @@ def user_stats(
 def get_user(user_id: int, session: Session = Depends(get_session)):
     """供内容模块展示作者昵称/头像使用，不返回敏感字段。
 
+    额外返回 content_count / comment_count（个人主页统计）。
     注意：动态路径 {user_id} 必须放在所有静态路径(/list /stats 等)之后，
     否则 FastAPI 会把 list/stats 当成 user_id 匹配。
     """
     user = session.get(User, user_id)
     if user is None:
         raise BizError(1005, "用户不存在")
-    return ok(user_public(user))
+    return ok(user_detail(user, session))
