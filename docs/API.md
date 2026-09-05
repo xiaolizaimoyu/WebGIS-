@@ -24,10 +24,20 @@
 
 | 值 | 含义 | category 二级分类 |
 |---|---|---|
-| `activity` | 校园活动 | 可空 |
-| `meeting` | 校园会议 | 可空 |
-| `news` | 校园动态 | 可空 |
-| `ad` | 校园广告 | `闲置` / `求助` / `宣传` / 自定义 |
+| `activity` | 校园活动 | 不支持（传了会被忽略清空） |
+| `meeting` | 校园会议 | 不支持（传了会被忽略清空） |
+| `news` | 校园动态 | 不支持（传了会被忽略清空） |
+| `ad` | 校园广告 | `闲置` / `求助` / `宣传`（可空） |
+| `food` | 美食分享 | `食堂推荐` / `小吃外卖` / `零食饮品`（可空） |
+| `lost` | 失物招领 | `寻物启事` / `失主招领`（可空） |
+
+> category 非空时必须命中上表白名单，否则返回 `code: 2004`。
+
+## 数据字典：地理位置（WebGIS）
+
+- 内容可绑定地理位置：`longitude`（经度，-180~180）、`latitude`（纬度，-90~90），为发布时地图选点拾取的坐标（高德 gcj-02）。
+- 两个字段必须**成对提交**：都不传 = 不绑定位置（存 null）；只传一个返回 `code: 400`。
+- 所有内容查询接口（列表/我的发布/详情）都会返回这两个字段，无位置时为 `null`，前端地图只渲染非 null 的点位。
 
 ## 接口列表
 
@@ -64,36 +74,46 @@
 ### 内容发布与查询（后端 E）
 
 **POST /api/contents** — 发布内容（鉴权）
-请求体：`{ "title": "标题", "body": "正文", "type": "activity", "category": "闲置|...可空", "images": ["/uploads/a.png"] }`
+请求体：`{ "title": "标题", "body": "正文", "type": "activity|meeting|news|ad|food|lost", "category": "子分类，可空", "images": ["/uploads/a.png"], "longitude": 116.39742, "latitude": 39.90923 }`
+- `type` 不在六类之内返回 `code: 2002`；`category` 非空但不在白名单返回 `code: 2004`。
+- `longitude/latitude` 可空，必须成对传，只传一个返回 `code: 400`。
 成功 data：新内容完整对象。
 
-**GET /api/contents** — 内容列表（首页信息流）
-Query：`type`（可选，不传=全部）、`page`（默认1）、`size`（默认10）
-成功 data：`{ "total": 100, "items": [内容对象] }`（按发布时间倒序，含作者信息）
+**GET /api/contents** — 内容列表（首页信息流 / 地图点位 / 搜索 / 热门排序）
+Query：`type`（可选，不传=全部，非法值返回 2002）、`keyword`（可选，≤50 字符，模糊匹配标题或正文）、`sort`（可选，`latest`默认按时间倒序 / `hot`按评论数降序，非法值返回 400）、`page`（默认1）、`size`（默认10，最大100）、`has_location`（可选，`true` 时只返回绑定了经纬度的内容，供地图点位/热力图拉取）、`author_id`（可选，按作者筛选，用户主页展示该用户发布的内容）
+成功 data：`{ "total": 100, "total_pages": 10, "items": [内容对象] }`（含作者信息、经纬度、评论数与浏览量）
 
 **GET /api/contents/mine** — 我的发布列表（鉴权）
-Query：`page`、`size`
-成功 data：`{ "total": N, "items": [...] }`，仅当前登录用户发布的内容，按时间倒序。
+Query：`type`（可选，不传=全部，非法值返回 2002）、`page`、`size`
+成功 data：`{ "total": N, "total_pages": M, "items": [...] }`，仅当前登录用户发布的内容，按时间倒序。
+
+**GET /api/contents/stats** — 内容统计（按分类汇总，无需鉴权）
+成功 data：`{ "total": 15, "by_type": {"activity": 3, "ad": 2, "food": 5, "lost": 1, "meeting": 1, "news": 3} }`，供首页仪表盘/分类导航使用。
 
 **PUT /api/contents/{id}** — 编辑自己发布的内容（鉴权，仅作者本人）
-请求体：同发布 `{title, body, type, category?, images?}`（全量提交）
+请求体：同发布 `{title, body, type, category?, images?, longitude?, latitude?}`（全量提交，校验规则同发布）
 失败：非本人操作返回 `code: 2003`。
 
 **DELETE /api/contents/{id}** — 删除自己发布的内容（鉴权，仅作者本人）
 删除该内容时会**连带删除其下所有评论**，不可恢复。
 失败：非本人操作返回 `code: 2003`。
 
-**GET /api/contents/{id}** — 内容详情
-成功 data：内容对象（含作者昵称）。
+**GET /api/contents/{id}** — 内容详情（每次访问自增 view_count 浏览量）
+成功 data：内容对象（含作者昵称、评论数与浏览量）。
 
 ### 评论（后端 E）
 
-**GET /api/contents/{id}/comments** — 评论列表
-成功 data：评论数组（含作者昵称，按时间正序）。
+**GET /api/contents/{id}/comments** — 评论列表（分页）
+Query：`page`（默认1）、`size`（默认20，最大100）
+成功 data：`{ "total": N, "total_pages": M, "items": [评论对象] }`（按时间正序）。
 
 **POST /api/contents/{id}/comments** — 发表评论（鉴权）
 请求体：`{ "body": "评论内容" }`
 成功 data：新评论对象。
+
+**DELETE /api/contents/{id}/comments/{comment_id}** — 删除评论（鉴权，仅作者本人）
+成功 data：`{ "id": comment_id, "deleted": true }`。
+失败：非本人评论返回 `code: 2003`；评论/内容不存在返回 `code: 2001`。
 
 ## 内容对象结构
 
@@ -105,11 +125,17 @@ Query：`page`、`size`
   "type": "activity",
   "category": null,
   "images": ["/uploads/x.png"],
+  "longitude": 116.39742,
+  "latitude": 39.90923,
   "author_id": 1,
   "author_name": "作者昵称",
+  "comment_count": 3,
+  "view_count": 42,
   "created_at": "2026-09-02T12:00:00"
 }
 ```
+
+> `longitude/latitude` 未绑定位置时为 `null`；`comment_count` 为评论总数（列表/详情均返回）；`view_count` 为浏览量，详情接口每次访问自增。
 
 ## 业务错误码约定
 
@@ -122,4 +148,5 @@ Query：`page`、`size`
 | 2001 | 内容不存在 |
 | 2002 | 分类 type 不合法 |
 | 2003 | 只能编辑/删除自己发布的内容（非作者操作） |
-| 400 | 参数校验失败（msg 为具体原因） |
+| 2004 | 子分类 category 不合法（不在该类型白名单内） |
+| 400 | 参数校验失败（msg 为具体原因，如经纬度未成对提交） |

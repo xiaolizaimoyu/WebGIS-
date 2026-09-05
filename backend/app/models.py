@@ -45,6 +45,8 @@ class Content(SQLModel, table=True):
     # WebGIS 新增：发帖时在地图上拾取的地理位置（gcj-02 高德坐标），可为空
     longitude: Optional[float] = Field(default=None, description="经度，未绑定位置为空")
     latitude: Optional[float] = Field(default=None, index=True, description="纬度，未绑定位置为空")
+    # 浏览量：详情接口每次访问自增，列表/详情均返回，前端展示热度
+    view_count: int = Field(default=0, description="浏览量")
     author_id: int = Field(foreign_key="users.id", index=True)
     created_at: datetime = Field(default_factory=datetime.now)
 
