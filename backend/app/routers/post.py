@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
 from sqlmodel import Session, select
 
 from app.core.config import ALLOWED_IMAGE_EXTENSIONS, MAX_IMAGE_SIZE, UPLOAD_DIR
@@ -80,6 +80,7 @@ def content_to_dict(content: Content, author_name: str, comment_count: int = 0) 
         "author_id": content.author_id,
         "author_name": author_name,
         "comment_count": comment_count,
+        "view_count": content.view_count,
         "created_at": content.created_at,
     }
 
@@ -170,6 +171,7 @@ def list_contents(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, ge=1, le=100),
     has_location: bool = Query(default=False, description="WebGIS：仅返回绑定了经纬度的内容（地图点位用）"),
+    author_id: Optional[int] = Query(default=None, description="按作者 id 筛选，不传为全部"),
     session: Session = Depends(get_session),
 ):
     if type is not None and type not in VALID_TYPES:
@@ -178,6 +180,8 @@ def list_contents(
         raise BizError(400, "排序参数 sort 仅支持：latest | hot")
 
     filters = [Content.type == type] if type else []
+    if author_id is not None:
+        filters.append(Content.author_id == author_id)
     keyword = (keyword or "").strip()
     if keyword:
         filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
@@ -335,6 +339,13 @@ def get_content(content_id: int, session: Session = Depends(get_session)):
     content = session.get(Content, content_id)
     if content is None:
         raise BizError(2001, "内容不存在或已被删除")
+    # 浏览量自增（直接 SQL 更新避免 ORM 乐观锁冲突）
+    session.execute(
+        text("UPDATE contents SET view_count = view_count + 1 WHERE id = :cid"),
+        {"cid": content_id},
+    )
+    session.commit()
+    session.refresh(content)
     author = session.get(User, content.author_id)
     comment_count = session.exec(
         select(func.count(Comment.id)).where(Comment.content_id == content.id)
@@ -343,17 +354,31 @@ def get_content(content_id: int, session: Session = Depends(get_session)):
 
 
 # ---------- 评论 ----------
-@router.get("/contents/{content_id}/comments", summary="评论列表")
-def list_comments(content_id: int, session: Session = Depends(get_session)):
+@router.get("/contents/{content_id}/comments", summary="评论列表（分页）")
+def list_comments(
+    content_id: int,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
+    session: Session = Depends(get_session),
+):
     if session.get(Content, content_id) is None:
         raise BizError(2001, "内容不存在或已被删除")
+    total = session.exec(
+        select(func.count(Comment.id)).where(Comment.content_id == content_id)
+    ).one()
     rows = session.exec(
         select(Comment)
         .where(Comment.content_id == content_id)
         .order_by(Comment.created_at.asc(), Comment.id.asc())
+        .offset((page - 1) * size)
+        .limit(size)
     ).all()
     name_map = users_nickname_map(session, [c.author_id for c in rows])
-    return ok([comment_to_dict(c, name_map.get(c.author_id, "未知用户")) for c in rows])
+    return ok({
+        "total": total,
+        "total_pages": (total + size - 1) // size,
+        "items": [comment_to_dict(c, name_map.get(c.author_id, "未知用户")) for c in rows],
+    })
 
 
 @router.post("/contents/{content_id}/comments", summary="发表评论（需登录）")
