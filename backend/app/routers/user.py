@@ -9,6 +9,7 @@ import logging
 import time
 
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from app.core.response import BizError, ok
@@ -131,13 +132,33 @@ def check_username(username: str, session: Session = Depends(get_session)):
     return ok({"available": exists is None, "username": username})
 
 
-@router.get("/{user_id}", summary="按 ID 查询用户公开信息")
-def get_user(user_id: int, session: Session = Depends(get_session)):
-    """供内容模块展示作者昵称/头像使用，不返回敏感字段。"""
-    user = session.get(User, user_id)
-    if user is None:
-        raise BizError(1005, "用户不存在")
-    return ok(user_public(user))
+@router.get("/list", summary="用户列表（分页）")
+def list_users(
+    page: int = 1,
+    page_size: int = 20,
+    keyword: str = "",
+    session: Session = Depends(get_session),
+):
+    """分页查询用户公开信息，支持按用户名/昵称模糊搜索。
+
+    供管理后台或成员展示页使用，不返回密码等敏感字段。
+    """
+    page = max(page, 1)
+    page_size = max(min(page_size, 100), 1)
+    stmt = select(User)
+    if keyword:
+        like = f"%{keyword}%"
+        stmt = stmt.where(User.username.contains(like) | User.nickname.contains(like))
+    total = len(session.exec(stmt).all())
+    users = session.exec(
+        stmt.offset((page - 1) * page_size).limit(page_size)
+    ).all()
+    return ok({
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "list": [user_public(u) for u in users],
+    })
 
 
 @router.post("/logout", summary="登出")
@@ -185,3 +206,118 @@ def change_password(
     blacklist_token(token)
     logger.info("修改密码成功 user_id=%s ip=%s", user.id, _client_ip(request))
     return ok(None, "密码修改成功，请用新密码重新登录")
+
+
+class DeleteAccountIn(BaseModel):
+    """注销账号请求体：需二次输入密码确认。"""
+
+    password: str = Field(min_length=1, max_length=64, description="当前密码确认")
+
+
+class ChangeUsernameIn(BaseModel):
+    """修改用户名请求体：需密码确认，新用户名遵守白名单。"""
+
+    new_username: str = Field(
+        min_length=2,
+        max_length=30,
+        pattern=r"^[a-zA-Z0-9_-]+$",
+        description="新登录账号，2-30位，仅字母数字下划线中横线",
+    )
+    password: str = Field(min_length=1, max_length=64, description="当前密码确认")
+
+
+@router.patch("/me/username", summary="修改用户名")
+def change_username(
+    data: ChangeUsernameIn,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """修改登录用户名，需输入密码确认。
+
+    - 校验新用户名唯一性与字符白名单（由 ChangeUsernameIn 保证）
+    - 改用户名后吊销当前 token，前端需用新用户名重新登录
+    """
+    if not verify_password(data.password, user.password_hash):
+        raise BizError(1003, "密码不正确")
+    if data.new_username == user.username:
+        raise BizError(1006, "新用户名不能与原用户名相同")
+    exists = session.exec(
+        select(User).where(User.username == data.new_username)
+    ).first()
+    if exists:
+        raise BizError(1002, "该用户名已被占用")
+    old_username = user.username
+    user.username = data.new_username
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    blacklist_token(token)
+    logger.info(
+        "修改用户名 user_id=%s old=%s new=%s ip=%s",
+        user.id, old_username, data.new_username, _client_ip(request),
+    )
+    return ok({"user": user_public(user)}, "用户名已修改，请用新用户名重新登录")
+
+
+@router.delete("/me", summary="注销账号")
+def delete_account(
+    data: DeleteAccountIn,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """注销当前账号，需二次输入密码确认。
+
+    注：物理删除用户记录。若用户已发布内容/评论，外键约束会阻止删除，
+    此处先校验密码，删除失败时返回明确提示。
+    """
+    if not verify_password(data.password, user.password_hash):
+        raise BizError(1003, "密码不正确，无法注销")
+    # 吊销当前 token
+    token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    blacklist_token(token)
+    try:
+        session.delete(user)
+        session.commit()
+    except Exception:
+        session.rollback()
+        logger.warning("注销失败(存在关联数据) user_id=%s ip=%s", user.id, _client_ip(request))
+        raise BizError(1007, "存在关联内容或评论，无法直接注销，请联系管理员")
+    logger.warning("账号注销 user_id=%s ip=%s", user.id, _client_ip(request))
+    return ok(None, "账号已注销")
+
+
+@router.get("/stats", summary="用户统计")
+def user_stats(
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """返回用户相关统计，供后台/数据分析使用（需登录）。"""
+    from datetime import datetime, timedelta
+
+    all_users = session.exec(select(User)).all()
+    now = datetime.now()
+    today_start = datetime(now.year, now.month, now.day)
+    week_start = today_start - timedelta(days=today_start.weekday())
+    today_new = sum(1 for u in all_users if u.created_at >= today_start)
+    week_new = sum(1 for u in all_users if u.created_at >= week_start)
+    return ok({
+        "total_users": len(all_users),
+        "today_new": today_new,
+        "week_new": week_new,
+    })
+
+
+@router.get("/{user_id}", summary="按 ID 查询用户公开信息")
+def get_user(user_id: int, session: Session = Depends(get_session)):
+    """供内容模块展示作者昵称/头像使用，不返回敏感字段。
+
+    注意：动态路径 {user_id} 必须放在所有静态路径(/list /stats 等)之后，
+    否则 FastAPI 会把 list/stats 当成 user_id 匹配。
+    """
+    user = session.get(User, user_id)
+    if user is None:
+        raise BizError(1005, "用户不存在")
+    return ok(user_public(user))
