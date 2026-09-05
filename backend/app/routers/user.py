@@ -39,6 +39,45 @@ _LOGIN_LOCK_SECONDS = 15 * 60   # 触发阈值后锁定 15 分钟
 _login_failures: dict[str, dict] = {}
 
 
+# ---------- 密码强度校验 ----------
+# 常见弱密码黑名单（小写比对）
+_WEAK_PASSWORDS = {
+    "123456", "1234567", "12345678", "123456789", "1234567890",
+    "password", "password1", "123456a", "111111", "000000",
+    "abc123", "qwerty", "iloveyou", "admin123", "root123",
+    "11111111", "aaaaaa", "a123456", "123123", "666666",
+}
+
+
+def _validate_password_strength(password: str, username: str = "") -> str:
+    """校验密码强度，返回错误文案；通过则返回空串。"""
+    pwd = password or ""
+    # 弱密码字典
+    if pwd.lower() in _WEAK_PASSWORDS:
+        return "密码过于常见，请更换"
+    # 与用户名相同
+    if username and pwd == username:
+        return "密码不能与用户名相同"
+    # 长度建议：虽然 Pydantic 允许 6 位，但 6-7 位提示强度不足
+    if len(pwd) < 8:
+        return "密码长度建议至少 8 位"
+    # 必须同时包含字母和数字
+    has_alpha = any(c.isalpha() for c in pwd)
+    has_digit = any(c.isdigit() for c in pwd)
+    if not (has_alpha and has_digit):
+        return "密码需同时包含字母和数字"
+    # 禁止连续/重复字符（如 aaa、1234、abcd）
+    def is_sequential(s: str) -> bool:
+        for i in range(len(s) - 2):
+            a, b, c = s[i], s[i + 1], s[i + 2]
+            if b.isalnum() and c.isalnum() and (ord(b) - ord(a) == ord(c) - ord(b) == 1):
+                return True
+        return False
+    if is_sequential(pwd.lower()):
+        return "密码不能包含连续字符（如 1234、abcd）"
+    return ""
+
+
 def _client_ip(request: Request) -> str:
     """取真实客户端 IP，兼容 vite/反代 X-Forwarded-For。"""
     xff = request.headers.get("x-forwarded-for", "")
@@ -90,6 +129,9 @@ def register(data: RegisterIn, request: Request, session: Session = Depends(get_
     exists = session.exec(select(User).where(User.username == data.username)).first()
     if exists:
         raise BizError(1002, "该用户名已被注册")
+    weak_msg = _validate_password_strength(data.password, data.username)
+    if weak_msg:
+        raise BizError(1008, weak_msg)
     user = User(
         username=data.username,
         nickname=data.nickname,
@@ -198,6 +240,9 @@ def change_password(
         raise BizError(1003, "原密码不正确")
     if data.old_password == data.new_password:
         raise BizError(1006, "新密码不能与原密码相同")
+    weak_msg = _validate_password_strength(data.new_password, user.username)
+    if weak_msg:
+        raise BizError(1008, weak_msg)
     user.password_hash = hash_password(data.new_password)
     session.add(user)
     session.commit()
