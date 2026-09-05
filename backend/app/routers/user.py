@@ -144,6 +144,12 @@ class DeleteAccountIn(BaseModel):
     password: str = Field(min_length=1, max_length=64, description="当前密码确认")
 
 
+class BatchUsersIn(BaseModel):
+    """批量查询用户请求体：传 id 列表，一次取回，避免 N+1 查询。"""
+
+    ids: list[int] = Field(min_length=1, max_length=100, description="用户 id 列表，单次最多100个")
+
+
 def user_public(user: User) -> dict:
     """对外暴露的用户信息（去掉密码哈希），注册/登录/me/更新资料共用同一结构。"""
     return {
@@ -234,6 +240,17 @@ def list_users(
         "page_size": page_size,
         "list": [user_public(u) for u in users],
     })
+
+
+@router.post("/batch", summary="批量查询用户公开信息")
+def batch_users(data: BatchUsersIn, session: Session = Depends(get_session)):
+    """按 id 列表批量取用户公开信息，供内容/评论模块批量填充作者。
+
+    一次查询替代循环 N 次 GET /{user_id}，避免 N+1 问题。
+    不存在的 id 自动跳过，返回顺序不保证与请求一致。
+    """
+    users = session.exec(select(User).where(User.id.in_(data.ids))).all()
+    return ok({"list": [user_public(u) for u in users]})
 
 
 @router.post("/logout", summary="登出")
