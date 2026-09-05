@@ -6,6 +6,7 @@ import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { useNotificationStore } from '@/stores/notification'
 import { formatTime } from '@/api/const'
+import WeatherWidget from '@/components/WeatherWidget.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -208,6 +209,9 @@ onMounted(() => {
       <router-view />
     </el-main>
   </el-container>
+
+  <!-- 全局右上角天气小组件（前端 B） -->
+  <WeatherWidget />
 </template>
 
 <style scoped>

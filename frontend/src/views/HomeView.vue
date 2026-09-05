@@ -1,21 +1,22 @@
 <script setup>
-// 首页（归属：前端 C 整合）——左信息流 + 右地图天气 分栏布局
+// 首页（归属：前端 C 整合）——左信息流 + 右地图 分栏布局
 // 左侧：前端 B 的业务信息流（保留原有逻辑）
-// 右侧：前端 A 的地图组件 + 天气组件
+// 右侧：前端 A 的地图组件
+// 天气组件（前端 B）为全局右上角悬浮，已在 MainLayout 中挂载
 import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import * as postApi from '@/api/post'
-import { TYPE_MAP, formatTime } from '@/api/const'
+import { formatTime } from '@/api/const'
+import { TYPE_MAP } from '@/api/typeMap' // B 扩展版：含美食分享 / 失物招领
 import { getMockContents } from '@/utils/mockData'
 import { useDialogStore } from '@/stores/dialog'
 import MapComponent from '@/components/MapComponent.vue'
-import WeatherWidget from '@/components/WeatherWidget.vue'
 
 const router = useRouter()
 const dialog = useDialogStore()
 const mapRef = ref(null)
 
-// ====== 左侧信息流（前端 B 业务逻辑保留） ======
+// 顶部 Tab：全部 + 六分类（value='all' 代表全部，请求时转 undefined）
 const tabs = [
   { value: 'all', label: '全部' },
   ...Object.entries(TYPE_MAP).map(([value, item]) => ({ value, label: item.label }))
@@ -164,10 +165,8 @@ onMounted(load)
       </div>
     </div>
 
-    <!-- 右侧：地图 + 天气 -->
+    <!-- 右侧：地图 -->
     <div class="right-panel">
-      <WeatherWidget city="北京" :use-mock="true" />
-
       <div class="map-wrapper">
         <div class="map-header">
           <span class="map-title">🗺️ 活动分布地图</span>
