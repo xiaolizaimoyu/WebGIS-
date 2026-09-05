@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
+from app.core.config import JWT_EXPIRE_MINUTES
 from app.core.response import BizError, ok
 from app.core.security import (
     blacklist_token,
@@ -198,7 +199,10 @@ def register(data: RegisterConfirmIn, request: Request, session: Session = Depen
     logger.info("注册成功 username=%s ip=%s", data.username, _client_ip(request))
     # 注册即登录：直接签发 token，前端无需再调用登录接口
     token = create_token(user.id)
-    return ok({"token": token, "user": user_public(user)}, "注册成功")
+    return ok(
+        {"token": token, "expires_in": JWT_EXPIRE_MINUTES * 60, "user": user_public(user)},
+        "注册成功",
+    )
 
 
 @router.post("/login", summary="登录")
@@ -214,7 +218,10 @@ def login(data: LoginIn, request: Request, session: Session = Depends(get_sessio
     _clear_login_failure(data.username, ip)
     logger.info("登录成功 username=%s ip=%s", data.username, ip)
     token = create_token(user.id)
-    return ok({"token": token, "user": user_public(user)}, "登录成功")
+    return ok(
+        {"token": token, "expires_in": JWT_EXPIRE_MINUTES * 60, "user": user_public(user)},
+        "登录成功",
+    )
 
 
 @router.get("/me", summary="当前登录用户")
