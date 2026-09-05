@@ -80,8 +80,8 @@
 成功 data：新内容完整对象。
 
 **GET /api/contents** — 内容列表（首页信息流 / 地图点位 / 搜索 / 热门排序）
-Query：`type`（可选，不传=全部，非法值返回 2002）、`keyword`（可选，≤50 字符，模糊匹配标题或正文）、`sort`（可选，`latest`默认按时间倒序 / `hot`按评论数降序，非法值返回 400）、`page`（默认1）、`size`（默认10，最大100）、`has_location`（可选，`true` 时只返回绑定了经纬度的内容，供地图点位/热力图拉取）
-成功 data：`{ "total": 100, "total_pages": 10, "items": [内容对象] }`（含作者信息、经纬度与评论数）
+Query：`type`（可选，不传=全部，非法值返回 2002）、`keyword`（可选，≤50 字符，模糊匹配标题或正文）、`sort`（可选，`latest`默认按时间倒序 / `hot`按评论数降序，非法值返回 400）、`page`（默认1）、`size`（默认10，最大100）、`has_location`（可选，`true` 时只返回绑定了经纬度的内容，供地图点位/热力图拉取）、`author_id`（可选，按作者筛选，用户主页展示该用户发布的内容）
+成功 data：`{ "total": 100, "total_pages": 10, "items": [内容对象] }`（含作者信息、经纬度、评论数与浏览量）
 
 **GET /api/contents/mine** — 我的发布列表（鉴权）
 Query：`type`（可选，不传=全部，非法值返回 2002）、`page`、`size`
@@ -98,13 +98,14 @@ Query：`type`（可选，不传=全部，非法值返回 2002）、`page`、`si
 删除该内容时会**连带删除其下所有评论**，不可恢复。
 失败：非本人操作返回 `code: 2003`。
 
-**GET /api/contents/{id}** — 内容详情
-成功 data：内容对象（含作者昵称）。
+**GET /api/contents/{id}** — 内容详情（每次访问自增 view_count 浏览量）
+成功 data：内容对象（含作者昵称、评论数与浏览量）。
 
 ### 评论（后端 E）
 
-**GET /api/contents/{id}/comments** — 评论列表
-成功 data：评论数组（含作者昵称，按时间正序）。
+**GET /api/contents/{id}/comments** — 评论列表（分页）
+Query：`page`（默认1）、`size`（默认20，最大100）
+成功 data：`{ "total": N, "total_pages": M, "items": [评论对象] }`（按时间正序）。
 
 **POST /api/contents/{id}/comments** — 发表评论（鉴权）
 请求体：`{ "body": "评论内容" }`
@@ -129,11 +130,12 @@ Query：`type`（可选，不传=全部，非法值返回 2002）、`page`、`si
   "author_id": 1,
   "author_name": "作者昵称",
   "comment_count": 3,
+  "view_count": 42,
   "created_at": "2026-09-02T12:00:00"
 }
 ```
 
-> `longitude/latitude` 未绑定位置时为 `null`；`comment_count` 为该内容的评论总数（列表/详情均返回）。
+> `longitude/latitude` 未绑定位置时为 `null`；`comment_count` 为评论总数（列表/详情均返回）；`view_count` 为浏览量，详情接口每次访问自增。
 
 ## 业务错误码约定
 
