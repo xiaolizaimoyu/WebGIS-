@@ -9,14 +9,19 @@ from pydantic import BaseModel, Field
 
 
 class RegisterIn(BaseModel):
-    username: str = Field(min_length=2, max_length=30, description="登录账号，2-30位")
+    username: str = Field(
+        min_length=2,
+        max_length=30,
+        pattern=r"^[a-zA-Z0-9_-]+$",
+        description="登录账号，2-30位，仅允许字母、数字、下划线、中横线",
+    )
     nickname: str = Field(min_length=1, max_length=30, description="昵称")
     password: str = Field(min_length=6, max_length=64, description="密码，至少6位")
 
 
 class LoginIn(BaseModel):
-    username: str
-    password: str
+    username: str = Field(max_length=30, description="登录账号")
+    password: str = Field(max_length=64, description="密码")
 
 
 class ContentIn(BaseModel):
