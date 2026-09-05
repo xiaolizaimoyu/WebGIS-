@@ -1,18 +1,19 @@
 <script setup>
-// 个人中心页（归属：前端 A）
-// 展示并编辑个人资料（昵称/头像）、修改密码
-// 说明：本路由 requiresAuth，未登录会被守卫拦截到登录页
-// TODO(前端A)：历史发布入口、头像裁剪、绑定手机号等扩展点
-import { reactive, ref, onMounted } from 'vue'
+// 个人中心页（归属：前端 A 资料/改密码 + 前端 C 签到积分 融合）
+// 路由 requiresAuth：登录后头像/导航进入
+// 功能：① 查看/编辑昵称、更换头像、查看积分 ② 修改密码 ③ 每日签到
+import { reactive, ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { uploadImage } from '@/api/post'
 import { updateProfile, changePassword } from '@/api/user'
 import { formatTime } from '@/api/const'
 import { useUserStore } from '@/stores/user'
 
+const router = useRouter()
 const store = useUserStore()
 
-// ---------- 基本信息 ----------
+// ---------- 基本信息（前端 A） ----------
 const saving = ref(false)
 const form = reactive({ nickname: '', avatar: '' })
 
@@ -20,6 +21,8 @@ onMounted(() => {
   const info = store.userInfo || {}
   form.nickname = info.nickname || ''
   form.avatar = info.avatar || ''
+  // 拉取签到状态（后端未通时内部走 mock 兜底）
+  store.fetchSignStatus()
 })
 
 const avatarText = () => {
@@ -53,7 +56,7 @@ async function saveProfile() {
   }
 }
 
-// ---------- 修改密码 ----------
+// ---------- 修改密码（前端 A） ----------
 const pwdFormRef = ref()
 const changing = ref(false)
 const pwd = reactive({ old: '', next: '', confirm: '' })
@@ -93,13 +96,35 @@ async function savePassword() {
     changing.value = false
   }
 }
+
+// ---------- 签到与积分（前端 C） ----------
+const totalPoints = computed(() => store.signStatus?.totalPoints || 0)
+const continuousDays = computed(() => store.signStatus?.continuousDays || 0)
+const signedToday = computed(() => store.signStatus?.signedToday || false)
+const signRecords = computed(() => store.signStatus?.signRecords || [])
+
+async function handleSign() {
+  if (signedToday.value) {
+    ElMessage.info('今日已签到，明天再来吧')
+    return
+  }
+  const result = await store.doSign()
+  if (result) {
+    ElMessage.success(`签到成功！获得 ${result.points} 积分，连续签到 ${result.continuousDays} 天`)
+  }
+}
 </script>
 
 <template>
-  <div class="page-container profile-page">
-    <!-- 基本信息 -->
+  <div class="profile-page">
+    <!-- 个人资料 -->
     <el-card shadow="never">
-      <template #header>个人资料</template>
+      <template #header>
+        <div class="card-head">
+          <span>个人资料</span>
+          <el-button type="primary" plain size="small" @click="router.push('/mine')">📝 我的发布</el-button>
+        </div>
+      </template>
       <div class="profile-head">
         <div class="avatar-wrap">
           <el-avatar :size="72" :src="form.avatar || undefined" class="big-avatar">
@@ -122,6 +147,12 @@ async function savePassword() {
             <span class="label">注册时间：</span>
             <span>{{ formatTime(store.userInfo?.created_at) || '-' }}</span>
           </div>
+          <div class="row">
+            <span class="label">累计积分：</span><span class="points-num">{{ totalPoints }}</span>
+          </div>
+          <div class="row">
+            <span class="label">连续签到：</span><span>{{ continuousDays }} 天</span>
+          </div>
         </div>
       </div>
 
@@ -136,7 +167,7 @@ async function savePassword() {
     </el-card>
 
     <!-- 修改密码 -->
-    <el-card shadow="never" class="pwd-card">
+    <el-card shadow="never" class="block-card">
       <template #header>修改密码</template>
       <el-form
         ref="pwdFormRef"
@@ -159,10 +190,72 @@ async function savePassword() {
         </el-form-item>
       </el-form>
     </el-card>
+
+    <!-- 每日签到 -->
+    <el-card shadow="never" class="block-card">
+      <template #header>每日签到</template>
+      <div class="sign-section">
+        <div class="sign-banner">
+          <div class="sign-info">
+            <div class="sign-desc">
+              连续签到 <span class="highlight">{{ continuousDays }}</span> 天 · 总积分 <span class="highlight">{{ totalPoints }}</span>
+            </div>
+          </div>
+          <el-button
+            type="primary"
+            size="large"
+            :class="{ signed: signedToday }"
+            :disabled="signedToday"
+            :loading="store.signLoading"
+            @click="handleSign"
+          >
+            {{ signedToday ? '✅ 今日已签' : '立即签到 +10' }}
+          </el-button>
+        </div>
+
+        <div class="sign-calendar">
+          <div class="calendar-title">最近签到记录</div>
+          <div class="calendar-grid">
+            <div
+              v-for="(record, i) in signRecords"
+              :key="i"
+              class="calendar-day"
+              :class="{ signed: record.points > 0 }"
+            >
+              <div class="day-date">{{ record.date.slice(5) }}</div>
+              <div class="day-points">+{{ record.points }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="points-rules">
+          <div class="rules-title">🎁 积分规则</div>
+          <ul>
+            <li>每日签到 +10 积分</li>
+            <li>连续签到 7 天额外奖励 +20 积分</li>
+            <li>发布内容 +5 积分，被点赞 +1 积分</li>
+            <li>回答问题被采纳 +20 积分</li>
+            <li>上传资料通过审核 +15 积分</li>
+          </ul>
+        </div>
+      </div>
+    </el-card>
   </div>
 </template>
 
 <style scoped>
+.profile-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .profile-head {
   display: flex;
   align-items: center;
@@ -200,7 +293,107 @@ async function savePassword() {
   color: #909399;
 }
 
-.pwd-card {
+.points-num {
+  color: #e6a23c;
+  font-weight: 700;
+}
+
+.block-card {
   margin-top: 16px;
+}
+
+/* ---- 签到与积分（前端 C 样式） ---- */
+.sign-section {
+  padding: 0 10px;
+}
+
+.sign-banner {
+  background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.sign-desc {
+  font-size: 15px;
+  color: #606266;
+}
+
+.highlight {
+  color: #f56c6c;
+  font-weight: 700;
+}
+
+.sign-banner .el-button.signed {
+  background: #67c23a;
+  border-color: #67c23a;
+}
+
+.sign-calendar {
+  margin-bottom: 20px;
+}
+
+.calendar-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 12px;
+}
+
+.calendar-grid {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.calendar-day {
+  width: 70px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #f5f7fa;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.calendar-day.signed {
+  background: linear-gradient(135deg, #67c23a, #85ce61);
+  color: #fff;
+}
+
+.day-date {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.day-points {
+  font-size: 11px;
+  margin-top: 2px;
+  opacity: 0.8;
+}
+
+.points-rules {
+  background: #fdf6ec;
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+
+.rules-title {
+  font-weight: 600;
+  color: #e6a23c;
+  margin-bottom: 8px;
+}
+
+.points-rules ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.points-rules li {
+  font-size: 13px;
+  color: #606266;
+  line-height: 2;
 }
 </style>

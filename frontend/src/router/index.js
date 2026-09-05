@@ -24,7 +24,7 @@ const routes = [
         path: 'publish',
         name: 'publish',
         component: () => import('@/views/PublishView.vue'),
-        meta: { title: '发布', requiresAuth: true } // 未登录访问会被拦截到登录页
+        meta: { title: '发布', requiresAuth: true }
       },
       {
         path: 'publish/:id',
@@ -49,8 +49,96 @@ const routes = [
         name: 'detail',
         component: () => import('@/views/DetailView.vue'),
         meta: { title: '详情' }
+      },
+      // ====== 校园问答模块 ======
+      {
+        path: 'questions',
+        name: 'questions',
+        component: () => import('@/views/QuestionsView.vue'),
+        meta: { title: '校园问答' }
+      },
+      {
+        path: 'question/:id',
+        name: 'question-detail',
+        component: () => import('@/views/QuestionDetailView.vue'),
+        meta: { title: '问题详情' }
+      },
+      {
+        path: 'question/publish',
+        name: 'question-publish',
+        component: () => import('@/views/QuestionPublishView.vue'),
+        meta: { title: '提出问题', requiresAuth: true }
+      },
+      // ====== 学习资料模块 ======
+      {
+        path: 'materials',
+        name: 'materials',
+        component: () => import('@/views/MaterialsView.vue'),
+        meta: { title: '学习资料' }
+      },
+      {
+        path: 'material/:id',
+        name: 'material-detail',
+        component: () => import('@/views/MaterialDetailView.vue'),
+        meta: { title: '资料详情' }
+      },
+      {
+        path: 'material/upload',
+        name: 'material-upload',
+        component: () => import('@/views/MaterialUploadView.vue'),
+        meta: { title: '上传资料', requiresAuth: true }
+      },
+      // ====== 组队拼车模块 ======
+      {
+        path: 'carpool',
+        name: 'carpool-list',
+        component: () => import('@/views/CarpoolListView.vue'),
+        meta: { title: '组队拼车' }
+      },
+      {
+        path: 'carpool/publish',
+        name: 'carpool-publish',
+        component: () => import('@/views/CarpoolPublishView.vue'),
+        meta: { title: '发布拼车', requiresAuth: true }
+      },
+      {
+        path: 'carpool/:id',
+        name: 'carpool-detail',
+        component: () => import('@/views/CarpoolDetailView.vue'),
+        meta: { title: '拼车详情' }
+      },
+      // ====== 失物招领模块 ======
+      {
+        path: 'lost-found',
+        name: 'lost-found-list',
+        component: () => import('@/views/LostFoundListView.vue'),
+        meta: { title: '失物招领' }
+      },
+      {
+        path: 'lost-found/publish',
+        name: 'lost-found-publish',
+        component: () => import('@/views/LostFoundPublishView.vue'),
+        meta: { title: '发布失物招领', requiresAuth: true }
+      },
+      {
+        path: 'lost-found/:id',
+        name: 'lost-found-detail',
+        component: () => import('@/views/LostFoundDetailView.vue'),
+        meta: { title: '失物招领详情' }
+      },
+      // ====== 用户系统 ======
+      {
+        path: 'user/profile/:id',
+        name: 'user-profile',
+        component: () => import('@/views/UserProfileView.vue'),
+        meta: { title: '用户主页' }
+      },
+      {
+        path: 'notifications',
+        name: 'notifications',
+        component: () => import('@/views/NotificationsView.vue'),
+        meta: { title: '消息通知', requiresAuth: true }
       }
-      // TODO(前端C/后续)：会员中心、我的发布等页面在 children 中追加
     ]
   },
   { path: '/:pathMatch(.*)*', redirect: '/' }
