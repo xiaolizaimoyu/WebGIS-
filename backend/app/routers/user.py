@@ -223,6 +223,53 @@ class DeleteAccountIn(BaseModel):
     password: str = Field(min_length=1, max_length=64, description="当前密码确认")
 
 
+class ChangeUsernameIn(BaseModel):
+    """修改用户名请求体：需密码确认，新用户名遵守白名单。"""
+
+    new_username: str = Field(
+        min_length=2,
+        max_length=30,
+        pattern=r"^[a-zA-Z0-9_-]+$",
+        description="新登录账号，2-30位，仅字母数字下划线中横线",
+    )
+    password: str = Field(min_length=1, max_length=64, description="当前密码确认")
+
+
+@router.patch("/me/username", summary="修改用户名")
+def change_username(
+    data: ChangeUsernameIn,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """修改登录用户名，需输入密码确认。
+
+    - 校验新用户名唯一性与字符白名单（由 ChangeUsernameIn 保证）
+    - 改用户名后吊销当前 token，前端需用新用户名重新登录
+    """
+    if not verify_password(data.password, user.password_hash):
+        raise BizError(1003, "密码不正确")
+    if data.new_username == user.username:
+        raise BizError(1006, "新用户名不能与原用户名相同")
+    exists = session.exec(
+        select(User).where(User.username == data.new_username)
+    ).first()
+    if exists:
+        raise BizError(1002, "该用户名已被占用")
+    old_username = user.username
+    user.username = data.new_username
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    blacklist_token(token)
+    logger.info(
+        "修改用户名 user_id=%s old=%s new=%s ip=%s",
+        user.id, old_username, data.new_username, _client_ip(request),
+    )
+    return ok({"user": user_public(user)}, "用户名已修改，请用新用户名重新登录")
+
+
 @router.delete("/me", summary="注销账号")
 def delete_account(
     data: DeleteAccountIn,
