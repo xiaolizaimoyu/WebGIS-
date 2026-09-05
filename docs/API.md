@@ -35,15 +35,51 @@
 
 **POST /api/user/register** — 注册
 请求体：`{ "username": "学号或用户名", "nickname": "昵称", "password": "至少6位" }`
-成功 data：注册后的用户信息 `{id, username, nickname}`
+成功 data：`{ "token": "...", "user": {id, username, nickname, avatar, created_at} }`（注册即登录）
 
 **POST /api/user/login** — 登录
 请求体：`{ "username": "", "password": "" }`
-成功 data：`{ "token": "...", "user": {id, username, nickname} }`
-错误：密码错误返回 `code: 1001`。
+成功 data：`{ "token": "...", "user": {id, username, nickname, avatar, created_at} }`
+错误：用户名或密码错误返回 `code: 1001`；连续失败 5 次锁定 15 分钟返回 `code: 1004`。
+
+**POST /api/user/logout** — 登出（鉴权）
+成功 data：`null`。当前 token 立即失效（加入黑名单）。
 
 **GET /api/user/me** — 获取当前登录用户（鉴权）
-成功 data：`{id, username, nickname}`
+成功 data：`{id, username, nickname, avatar, created_at}`
+
+**PUT /api/user/me** — 更新个人资料（鉴权）
+请求体：`{ "nickname": "新昵称(可空)", "avatar": "头像URL(可空, 空串=清除)" }`
+成功 data：更新后的用户信息。
+
+**PUT /api/user/password** — 修改密码（鉴权）
+请求体：`{ "old_password": "", "new_password": "至少6位" }`
+成功 data：`null`。原 token 立即失效，需用新密码重新登录。
+错误：原密码错误 `code: 1003`；新旧相同 `code: 1006`。
+
+**PATCH /api/user/me/username** — 修改用户名（鉴权）
+请求体：`{ "new_username": "新用户名", "password": "当前密码确认" }`
+成功 data：`{ "user": {...} }`。原 token 立即失效，需用新用户名重新登录。
+错误：密码不正确 `code: 1003`；新旧相同 `code: 1006`；用户名被占用 `code: 1002`。
+
+**DELETE /api/user/me** — 注销账号（鉴权）
+请求体：`{ "password": "当前密码确认" }`
+成功 data：`null`。
+错误：密码不正确 `code: 1003`；存在关联内容/评论 `code: 1007`。
+
+**GET /api/user/check-username?username=xxx** — 检查用户名是否可用
+成功 data：`{ "available": true/false, "username": "xxx" }`
+
+**GET /api/user/{user_id}** — 按 ID 查询用户公开信息
+成功 data：`{id, username, nickname, avatar, created_at}`
+错误：用户不存在 `code: 1005`。
+
+**GET /api/user/list** — 用户列表（分页）
+Query：`page`（默认1）、`page_size`（默认20，上限100）、`keyword`（按用户名/昵称模糊搜索）
+成功 data：`{ "total": 100, "page": 1, "page_size": 20, "list": [{id, username, nickname, avatar, created_at}] }`
+
+**GET /api/user/stats** — 用户统计（鉴权）
+成功 data：`{ "total_users": 100, "today_new": 5, "week_new": 20 }`
 
 ### 图片上传（内容模块，鉴权）
 
