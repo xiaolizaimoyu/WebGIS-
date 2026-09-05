@@ -140,6 +140,35 @@ def get_user(user_id: int, session: Session = Depends(get_session)):
     return ok(user_public(user))
 
 
+@router.get("/list", summary="用户列表（分页）")
+def list_users(
+    page: int = 1,
+    page_size: int = 20,
+    keyword: str = "",
+    session: Session = Depends(get_session),
+):
+    """分页查询用户公开信息，支持按用户名/昵称模糊搜索。
+
+    供管理后台或成员展示页使用，不返回密码等敏感字段。
+    """
+    page = max(page, 1)
+    page_size = max(min(page_size, 100), 1)
+    stmt = select(User)
+    if keyword:
+        like = f"%{keyword}%"
+        stmt = stmt.where(User.username.contains(like) | User.nickname.contains(like))
+    total = len(session.exec(stmt).all())
+    users = session.exec(
+        stmt.offset((page - 1) * page_size).limit(page_size)
+    ).all()
+    return ok({
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "list": [user_public(u) for u in users],
+    })
+
+
 @router.post("/logout", summary="登出")
 def logout(request: Request, user: User = Depends(get_current_user)):
     """将当前 token 加入黑名单，使其立即失效。"""
