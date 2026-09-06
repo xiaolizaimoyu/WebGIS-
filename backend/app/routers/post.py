@@ -24,14 +24,13 @@ from app.schemas import CommentIn, ContentIn
 router = APIRouter(prefix="/api", tags=["内容与评论"])
 
 # 内容一级分类，见 docs/API.md
-# WebGIS 新增 food（美食分享）/ lost（失物招领）
-VALID_TYPES = {"activity", "meeting", "news", "ad", "food", "lost"}
+# 已下线 activity（校园活动）/ ad（校园广告），仅保留 meeting/news/food/lost
+VALID_TYPES = {"meeting", "news", "food", "lost"}
 
 # 各一级分类允许的二级子分类（category）。
-# - 表中没有的类型（activity/meeting/news）不支持子分类，提交时统一清空；
+# - 表中没有的类型（meeting/news）不支持子分类，提交时统一清空；
 # - 表中的类型 category 可空；非空时必须命中白名单，保证地图/列表筛选数据规范。
 CATEGORY_RULES = {
-    "ad": ["闲置", "求助", "宣传"],
     "food": ["食堂推荐", "小吃外卖", "零食饮品"],
     "lost": ["寻物启事", "失主招领"],
 }

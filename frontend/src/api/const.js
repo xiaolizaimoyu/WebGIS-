@@ -1,16 +1,11 @@
 // 分类常量（前端共用）——与后端 contents.type 一一对应
 // value 存库；label 展示文案；tagType 用于 Element Plus 标签颜色；mapColor 用于地图点位颜色
 export const TYPE_MAP = {
-  activity: { label: '校园活动', tagType: 'success', mapColor: '#2f9e44' },
   meeting: { label: '校园会议', tagType: 'warning', mapColor: '#f59f00' },
   news: { label: '校园动态', tagType: 'info', mapColor: '#1971c2' },
-  ad: { label: '校园广告', tagType: 'danger', mapColor: '#e03131' },
   food: { label: '美食分享', tagType: 'primary', mapColor: '#f06595' },
   lost: { label: '失物招领', tagType: 'warning', mapColor: '#6741d9' }
 }
-
-// 广告子分类（与后端 post.py 的 _ensure_valid_type 白名单一致）
-export const AD_CATEGORIES = ['闲置', '求助', '宣传']
 
 // 地图配置（Leaflet，无需 key）。
 // center 为山东理工大学西校区（淄博·新村西路 266 号），与后端 seed.py 的 MAP_CENTER 保持一致。

@@ -8,7 +8,6 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as postApi from '@/api/post'
-import { AD_CATEGORIES } from '@/api/const'
 
 const route = useRoute()
 const router = useRouter()
@@ -30,7 +29,7 @@ const editId = computed(() => (route.params.id ? Number(route.params.id) : null)
 const form = reactive({
   title: '',
   body: '',
-  type: 'activity',
+  type: 'meeting',
   category: '',
   longitude: null, // 经度，未选点为 null（后端 E 联调后入库，当前后端会忽略该字段）
   latitude: null // 纬度
@@ -41,7 +40,6 @@ const rules = {
   body: [{ required: true, message: '请输入正文内容', trigger: 'blur' }]
 }
 
-const isAd = computed(() => form.type === 'ad')
 const fileList = ref([]) // el-upload 双向列表；新传成功 file.response={url}；历史图无 response，直接用 file.url
 const previewVisible = ref(false)
 const previewUrl = ref('')
@@ -156,17 +154,13 @@ async function submit() {
   } catch {
     return
   }
-  if (isAd.value && !form.category) {
-    ElMessage.warning('请选择广告的子分类（如闲置 / 求助 / 宣传）')
-    return
-  }
   submitting.value = true
   try {
     const payload = {
       title: form.title.trim(),
       body: form.body.trim(),
       type: form.type,
-      category: isAd.value ? form.category : undefined,
+      category: undefined,
       images: collectImages()
     }
     let data
@@ -192,20 +186,12 @@ async function submit() {
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="内容分类" prop="type">
           <el-radio-group v-model="form.type">
-            <el-radio-button value="activity">校园活动</el-radio-button>
             <el-radio-button value="meeting">校园会议</el-radio-button>
             <el-radio-button value="news">校园动态</el-radio-button>
-            <el-radio-button value="ad">校园广告</el-radio-button>
             <!-- 新增分类（规划书 5-2）：美食分享 / 失物招领 -->
             <el-radio-button value="food">美食分享</el-radio-button>
             <el-radio-button value="lost">失物招领</el-radio-button>
           </el-radio-group>
-        </el-form-item>
-
-        <el-form-item v-if="isAd" label="子分类" required>
-          <el-select v-model="form.category" placeholder="请选择广告子分类" style="width: 220px">
-            <el-option v-for="c in AD_CATEGORIES" :key="c" :label="c" :value="c" />
-          </el-select>
         </el-form-item>
 
         <el-form-item label="标题" prop="title">

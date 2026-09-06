@@ -2,7 +2,7 @@
 
 三张表：
 - users     用户
-- contents  内容（活动/会议/动态/广告 统一一张表，type 区分）
+- contents  内容（会议/动态/美食/失物 统一一张表，type 区分）
 - comments  评论
 
 改动表结构请统一在此修改，并由 db.create_db_and_tables() 重建。
@@ -28,14 +28,14 @@ class User(SQLModel, table=True):
 
 
 class Content(SQLModel, table=True):
-    """内容表：活动 activity / 会议 meeting / 动态 news / 广告 ad / 美食 food / 失物招领 lost，由 type 区分"""
+    """内容表：会议 meeting / 动态 news / 美食 food / 失物招领 lost，由 type 区分（已下线 activity/ad）"""
 
     __tablename__ = "contents"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     title: str = Field(description="标题")
     body: str = Field(description="正文")
-    type: str = Field(index=True, description="activity | meeting | news | ad | food | lost")
+    type: str = Field(index=True, description="meeting | news | food | lost")
     category: Optional[str] = Field(default=None, description="二级子分类，如广告：闲置/求助/宣传")
     images: List[str] = Field(
         default_factory=list,
