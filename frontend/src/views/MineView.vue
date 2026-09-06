@@ -6,8 +6,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as postApi from '@/api/post'
-import { formatTime } from '@/api/const'
-import { TYPE_MAP } from '@/api/typeMap' // B 扩展版：含美食分享 / 失物招领
+import { formatTime, TYPE_MAP } from '@/api/const'
 
 const router = useRouter()
 
