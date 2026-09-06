@@ -1,8 +1,11 @@
 // 用户认证接口（前端 A 使用，对接后端 D 的 /api/user）
 import request from './request'
 
-// 登录：返回 { token, user }
+// 登录：返回 { token, user }（需传 captcha_id + captcha_code）
 export const login = (data) => request.post('/user/login', data)
+
+// 获取登录图形验证码：返回 { captcha_id, image, expires_in }
+export const getCaptcha = () => request.get('/user/captcha')
 
 // 注册：返回用户信息
 export const register = (data) => request.post('/user/register', data)
