@@ -33,6 +33,7 @@ const navMenus = [
   { path: '/materials', label: '学习资料', icon: '📚' },
   { path: '/carpool', label: '组队拼车', icon: '🚗' },
   { path: '/lost-found', label: '失物招领', icon: '🔍' },
+  { path: '/map', label: '校园地图', icon: '🗺️' },
   { path: '/mall', label: '积分商城', icon: '🎁' }
 ]
 

@@ -21,6 +21,12 @@ const routes = [
     children: [
       { path: '', name: 'home', component: () => import('@/views/HomeView.vue'), meta: { title: '首页' } },
       {
+        path: 'map',
+        name: 'map',
+        component: () => import('@/views/MapView.vue'),
+        meta: { title: '校园地图' }
+      },
+      {
         path: 'publish',
         name: 'publish',
         component: () => import('@/views/PublishView.vue'),
