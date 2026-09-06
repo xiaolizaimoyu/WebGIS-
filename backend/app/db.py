@@ -2,10 +2,12 @@
 
 SQLModel 基于 SQLAlchemy。SQLite 免安装，启动时自动建库建表。
 
-说明：SQLite 的 create_all 只建“新表”，不会给“已存在的表”加新列。
+注意：SQLite 的 create_all 只建“新表”，不会给“已存在的表”加新列。
 因此这里加了自动补列（_sync_columns）：启动时把 models 里定义但表中缺失的列，
-用 ALTER TABLE ADD COLUMN 补上 —— 这样以后“给某张表加字段”不再需要删库，
-**用户注册的账号、发布的帖子都会保留**。
+用 ALTER TABLE ADD COLUMN 补上 —— 以后“给某张表加字段”不再需要删库重建，
+用户注册的账号、发布的帖子都会保留。
+
+其他模块通过 `session: Session = Depends(get_session)` 拿到会话。
 """
 from sqlalchemy import inspect, text
 from sqlmodel import Session, SQLModel, create_engine
