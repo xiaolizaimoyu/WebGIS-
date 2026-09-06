@@ -8,7 +8,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as postApi from '@/api/post'
-import { AD_CATEGORIES, TYPE_LIST } from '@/api/const'
+import { TYPE_LIST } from '@/api/const'
 import LocationPicker from '@/components/map/LocationPicker.vue'
 
 const route = useRoute()
@@ -23,7 +23,7 @@ const editId = computed(() => (route.params.id ? Number(route.params.id) : null)
 const form = reactive({
   title: '',
   body: '',
-  type: 'activity',
+  type: 'meeting',
   category: ''
 })
 
@@ -32,7 +32,6 @@ const rules = {
   body: [{ required: true, message: '请输入正文内容', trigger: 'blur' }]
 }
 
-const isAd = computed(() => form.type === 'ad')
 const fileList = ref([]) // el-upload 双向列表；新传成功 file.response={url}；历史图无 response，直接用 file.url
 const previewVisible = ref(false)
 const previewUrl = ref('')
@@ -99,17 +98,12 @@ async function submit() {
   } catch {
     return
   }
-  if (isAd.value && !form.category) {
-    ElMessage.warning('请选择广告的子分类（如闲置 / 求助 / 宣传）')
-    return
-  }
   submitting.value = true
   try {
     const payload = {
       title: form.title.trim(),
       body: form.body.trim(),
       type: form.type,
-      category: isAd.value ? form.category : undefined,
       images: collectImages()
     }
     if (locEnabled.value && location.value) {
@@ -145,12 +139,6 @@ async function submit() {
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item v-if="isAd" label="子分类" required>
-          <el-select v-model="form.category" placeholder="请选择广告子分类" style="width: 220px">
-            <el-option v-for="c in AD_CATEGORIES" :key="c" :label="c" :value="c" />
-          </el-select>
-        </el-form-item>
-
         <el-form-item label="标题" prop="title">
           <el-input
             v-model="form.title"
@@ -166,7 +154,7 @@ async function submit() {
             type="textarea"
             :rows="6"
             maxlength="5000"
-            placeholder="详细描述内容……（活动可写时间地点，广告可写价格联系方式等）"
+            placeholder="详细描述内容……（会议可写时间地点，美食可写推荐理由，失物可写拾取地点等）"
           />
         </el-form-item>
 

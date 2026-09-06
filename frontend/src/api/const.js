@@ -1,10 +1,8 @@
 // 分类常量（前端共用）——与后端 contents.type 一一对应
 // value 存库；label 展示文案；tagType 用于 Element Plus 标签颜色；mapColor 用于地图点位颜色
 export const TYPE_MAP = {
-  activity: { label: '校园活动', tagType: 'success', mapColor: '#2f9e44' },
   meeting: { label: '校园会议', tagType: 'warning', mapColor: '#f59f00' },
   news: { label: '校园动态', tagType: 'info', mapColor: '#1971c2' },
-  ad: { label: '校园广告', tagType: 'danger', mapColor: '#e03131' },
   food: { label: '校园美食', tagType: 'warning', mapColor: '#f06595' },
   lost: { label: '失物招领', tagType: 'danger', mapColor: '#6741d9' }
 }
@@ -20,9 +18,6 @@ export const MAP_CONFIG = {
   subdomains: ['1', '2', '3', '4'],
   maxZoom: 18
 }
-
-// 广告的二级子分类（后续可扩展）
-export const AD_CATEGORIES = ['闲置', '求助', '宣传']
 
 export const TYPE_LIST = Object.entries(TYPE_MAP).map(([value, item]) => ({
   value,
