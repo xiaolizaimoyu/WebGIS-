@@ -67,11 +67,11 @@ const mapZoom = ref(12)
 // 从内容列表提取地图标记点（带坐标的内容）
 const mapMarkers = computed(() =>
   list.value
-    .filter((c) => c.lng && c.lat)
+    .filter((c) => c.longitude && c.latitude)
     .map((c) => ({
       id: c.id,
-      lng: c.lng,
-      lat: c.lat,
+      lng: c.longitude,
+      lat: c.latitude,
       title: c.title
     }))
 )

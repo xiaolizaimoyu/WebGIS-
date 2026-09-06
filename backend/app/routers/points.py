@@ -105,6 +105,14 @@ def points_log(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100),
 notify_router = APIRouter(prefix="/api/notifications", tags=["通知"])
 
 
+@notify_router.get("/unread-count", summary="未读通知数量")
+def unread_count(user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    count = len(session.exec(
+        select(Notification).where(Notification.user_id == user.id, Notification.is_read == False)  # noqa: E712
+    ).all())
+    return ok({"count": count})
+
+
 @notify_router.get("", summary="我的通知列表")
 def list_notifications(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100),
                        only_unread: bool = Query(False),
