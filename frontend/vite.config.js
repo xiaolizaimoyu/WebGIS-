@@ -10,6 +10,7 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
   },
   server: {
+    host: true, // 同时监听 IPv4(127.0.0.1) 和 IPv6(::1)，避免只用 127.0.0.1 访问时代理失败
     port: 5173,
     // 开发期把 /api 与 /uploads 代理到后端 8000 端口，前端零跨域、图片可直接用 /uploads/xxx
     proxy: {
