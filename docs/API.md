@@ -133,6 +133,7 @@ Query：`type`（可选，不传=全部，非法值返回 2002）、`page`、`si
 
 **GET /api/contents/{id}** — 内容详情（每次访问自增 view_count 浏览量）
 成功 data：内容对象（含作者昵称、评论数与浏览量）。
+已登录用户访问时额外返回 `is_author: true/false`，前端据此决定是否显示编辑/删除按钮；未登录时该字段不出现。
 
 ### 评论（后端 E）
 
@@ -143,6 +144,7 @@ Query：`page`（默认1）、`size`（默认20，最大100）
 **POST /api/contents/{id}/comments** — 发表评论（鉴权）
 请求体：`{ "body": "评论内容" }`
 成功 data：新评论对象。
+失败：`body` 为纯空白返回 `code: 400`。
 
 **DELETE /api/contents/{id}/comments/{comment_id}** — 删除评论（鉴权，仅作者本人）
 成功 data：`{ "id": comment_id, "deleted": true }`。

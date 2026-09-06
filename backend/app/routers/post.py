@@ -10,13 +10,13 @@ import uuid
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from sqlalchemy import func, or_, text
 from sqlmodel import Session, select
 
 from app.core.config import ALLOWED_IMAGE_EXTENSIONS, MAX_IMAGE_SIZE, UPLOAD_DIR
 from app.core.response import BizError, ok
-from app.core.security import get_current_user
+from app.core.security import decode_token, get_current_user
 from app.db import get_session
 from app.models import Comment, Content, User
 from app.schemas import CommentIn, ContentIn
@@ -65,9 +65,35 @@ def _ensure_valid_type(content_type: str) -> None:
         raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
 
 
+def _validate_optional_type(content_type: Optional[str]) -> None:
+    """列表接口的 type 筛选校验：None 不校验，非空则必须合法。"""
+    if content_type is not None and content_type not in VALID_TYPES:
+        raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
+
+
+def _clean_text(value: str, field_name: str) -> str:
+    """去首尾空白并拒绝纯空白输入（标题 / 正文 / 评论共用）。"""
+    value = value.strip()
+    if not value:
+        raise BizError(400, f"{field_name}不能为空白")
+    return value
+
+
+def _get_optional_user(request: Request, session: Session) -> Optional[User]:
+    """从 Authorization 头尝试解析用户，未登录或 token 无效返回 None（不报错）。"""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    try:
+        user_id = decode_token(auth.removeprefix("Bearer ").strip())
+        return session.get(User, user_id)
+    except BizError:
+        return None
+
+
 # ---------- 序列化辅助 ----------
-def content_to_dict(content: Content, author_name: str, comment_count: int = 0) -> dict:
-    return {
+def content_to_dict(content: Content, author_name: str, comment_count: int = 0, is_author: Optional[bool] = None) -> dict:
+    d = {
         "id": content.id,
         "title": content.title,
         "body": content.body,
@@ -83,6 +109,10 @@ def content_to_dict(content: Content, author_name: str, comment_count: int = 0) 
         "view_count": content.view_count,
         "created_at": content.created_at,
     }
+    # 详情接口可选鉴权时传入，前端据此决定是否显示编辑/删除按钮
+    if is_author is not None:
+        d["is_author"] = is_author
+    return d
 
 
 def comment_to_dict(comment: Comment, author_name: str) -> dict:
@@ -148,8 +178,8 @@ def create_content(
     longitude, latitude = _normalize_location(data.longitude, data.latitude)
     category = _normalize_category(data.type, data.category)
     content = Content(
-        title=data.title,
-        body=data.body,
+        title=_clean_text(data.title, "标题"),
+        body=_clean_text(data.body, "正文"),
         type=data.type,
         category=category,
         images=data.images,
@@ -174,8 +204,7 @@ def list_contents(
     author_id: Optional[int] = Query(default=None, description="按作者 id 筛选，不传为全部"),
     session: Session = Depends(get_session),
 ):
-    if type is not None and type not in VALID_TYPES:
-        raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
+    _validate_optional_type(type)
     if sort not in ("latest", "hot"):
         raise BizError(400, "排序参数 sort 仅支持：latest | hot")
 
@@ -207,8 +236,9 @@ def list_contents(
         )
         rows = session.exec(stmt).all()
         items = [r[0] for r in rows]
-        # 热门排序时 comment_count 从子查询已拿到，直接用
+        # 热门排序时子查询已带回全部评论数，无需再查 count_map
         hot_counts = {r[0].id: r[1] for r in rows}
+        count_map = {}
     else:
         stmt = (
             select(Content)
@@ -219,8 +249,8 @@ def list_contents(
         )
         items = session.exec(stmt).all()
         hot_counts = None
+        count_map = comments_count_map(session, [c.id for c in items])
     name_map = users_nickname_map(session, [c.author_id for c in items])
-    count_map = comments_count_map(session, [c.id for c in items])
     return ok({
         "total": total,
         "total_pages": (total + size - 1) // size,
@@ -228,7 +258,7 @@ def list_contents(
             content_to_dict(
                 c,
                 name_map.get(c.author_id, "未知用户"),
-                hot_counts.get(c.id, count_map.get(c.id, 0)) if hot_counts else count_map.get(c.id, 0),
+                hot_counts.get(c.id, 0) if hot_counts else count_map.get(c.id, 0),
             )
             for c in items
         ],
@@ -248,8 +278,7 @@ def list_my_contents(
     注意：/contents/mine 必须声明在 /contents/{content_id} 之前，
     否则 "mine" 会被当成 id 解析而报 422。
     """
-    if type is not None and type not in VALID_TYPES:
-        raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
+    _validate_optional_type(type)
 
     filters = [Content.author_id == user.id]
     if type:
@@ -269,7 +298,7 @@ def list_my_contents(
     return ok({
         "total": total,
         "total_pages": (total + size - 1) // size,
-        "items": [content_to_dict(c, user.nickname, count_map.get(c.id, 0)) for c in items],
+        "items": [content_to_dict(c, user.nickname, count_map.get(c.id, 0), True) for c in items],
     })
 
 
@@ -301,8 +330,8 @@ def update_content(
         raise BizError(2003, "只能编辑自己发布的内容")
     _ensure_valid_type(data.type)
     longitude, latitude = _normalize_location(data.longitude, data.latitude)
-    content.title = data.title
-    content.body = data.body
+    content.title = _clean_text(data.title, "标题")
+    content.body = _clean_text(data.body, "正文")
     content.type = data.type
     content.category = _normalize_category(data.type, data.category)
     content.images = data.images
@@ -325,17 +354,18 @@ def delete_content(
         raise BizError(2001, "内容不存在或已被删除")
     if content.author_id != user.id:
         raise BizError(2003, "只能删除自己发布的内容")
-    # 连带删除该内容下的所有评论，避免留下孤儿评论
-    comments = session.exec(select(Comment).where(Comment.content_id == content.id)).all()
-    for c in comments:
-        session.delete(c)
+    # 批量删除该内容下的所有评论，避免逐条 ORM delete 的 N+1 问题
+    session.execute(
+        text("DELETE FROM comments WHERE content_id = :cid"),
+        {"cid": content.id},
+    )
     session.delete(content)
     session.commit()
     return ok({"id": content_id, "deleted": True}, "删除成功")
 
 
 @router.get("/contents/{content_id}", summary="内容详情")
-def get_content(content_id: int, session: Session = Depends(get_session)):
+def get_content(content_id: int, request: Request, session: Session = Depends(get_session)):
     content = session.get(Content, content_id)
     if content is None:
         raise BizError(2001, "内容不存在或已被删除")
@@ -350,7 +380,10 @@ def get_content(content_id: int, session: Session = Depends(get_session)):
     comment_count = session.exec(
         select(func.count(Comment.id)).where(Comment.content_id == content.id)
     ).one()
-    return ok(content_to_dict(content, author.nickname if author else "未知用户", comment_count))
+    # 可选鉴权：已登录时返回 is_author，前端据此显示编辑/删除按钮
+    current_user = _get_optional_user(request, session)
+    is_author = content.author_id == current_user.id if current_user is not None else None
+    return ok(content_to_dict(content, author.nickname if author else "未知用户", comment_count, is_author))
 
 
 # ---------- 评论 ----------
@@ -390,7 +423,7 @@ def create_comment(
 ):
     if session.get(Content, content_id) is None:
         raise BizError(2001, "内容不存在或已被删除")
-    comment = Comment(content_id=content_id, author_id=user.id, body=data.body)
+    comment = Comment(content_id=content_id, author_id=user.id, body=_clean_text(data.body, "评论内容"))
     session.add(comment)
     session.commit()
     session.refresh(comment)
