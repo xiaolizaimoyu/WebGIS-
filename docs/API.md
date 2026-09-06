@@ -24,12 +24,12 @@
 
 | 值 | 含义 | category 二级分类 |
 |---|---|---|
-| `activity` | 校园活动 | 可空 |
 | `meeting` | 校园会议 | 可空 |
 | `news` | 校园动态 | 可空 |
-| `ad` | 校园广告 | `闲置` / `求助` / `宣传` / 自定义 |
 | `food` | 校园美食分享 | 可空 |
 | `lost` | 失物招领 | 可空 |
+
+> 已下线：`activity`（校园活动）与 `ad`（校园广告）两类功能与其他模块重复，已移除，不再支持发布/筛选。
 
 > 每条内容可带经纬度 `longitude/latitude`（WGS84，发布页地图选点获得）；无坐标的内容不会出现在校园地图页。前端地图坐标配置见 `frontend/src/api/const.js` 的 `MAP_CONFIG`。
 
@@ -68,7 +68,7 @@
 ### 内容发布与查询（后端 E）
 
 **POST /api/contents** — 发布内容（鉴权）
-请求体：`{ "title": "标题", "body": "正文", "type": "activity", "category": "闲置|...可空", "images": ["/uploads/a.png"], "longitude": 121.4021, "latitude": 31.2212 }`（后两项可选，地图选点获得）
+请求体：`{ "title": "标题", "body": "正文", "type": "meeting", "images": ["/uploads/a.png"], "longitude": 121.4021, "latitude": 31.2212 }`（后两项可选，地图选点获得；`type` 仅支持 meeting/news/food/lost）
 成功 data：新内容完整对象。
 
 **GET /api/contents** — 内容列表（首页信息流）
@@ -106,7 +106,7 @@ Query：`page`、`size`
   "id": 1,
   "title": "标题",
   "body": "正文",
-  "type": "activity",
+  "type": "meeting",
   "category": null,
   "images": ["/uploads/x.png"],
   "longitude": 121.4021,
