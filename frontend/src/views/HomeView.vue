@@ -4,14 +4,14 @@
 // 右侧：前端 A 的地图组件
 // 天气组件（前端 B）为全局右上角悬浮，已在 MainLayout 中挂载
 import { onMounted, ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import * as postApi from '@/api/post'
-import { formatTime } from '@/api/const'
-import { TYPE_MAP } from '@/api/typeMap' // B 扩展版：含美食分享 / 失物招领
+import { formatTime, TYPE_MAP } from '@/api/const'
 import { getMockContents } from '@/utils/mockData'
 import { useDialogStore } from '@/stores/dialog'
 import MapComponent from '@/components/MapComponent.vue'
 
+const route = useRoute()
 const router = useRouter()
 const dialog = useDialogStore()
 const mapRef = ref(null)
@@ -141,7 +141,7 @@ onMounted(load)
               <span>{{ c.author_name }}</span>
               <span>发布于 {{ formatTime(c.created_at) }}</span>
             </div>
-            <div class="item-actions" v-if="c.lng && c.lat">
+            <div class="item-actions" v-if="lngOf(c) != null && latOf(c) != null">
               <el-button text type="primary" size="small" @click.stop="locateOnMap(c)">
                 📍 在地图上查看
               </el-button>
