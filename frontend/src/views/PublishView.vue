@@ -161,7 +161,10 @@ async function submit() {
       body: form.body.trim(),
       type: form.type,
       category: undefined,
-      images: collectImages()
+      images: collectImages(),
+      // 选点结果映射为后端字段：longitude / latitude 需成对提交（后端校验）
+      longitude: form.location?.lng ?? null,
+      latitude: form.location?.lat ?? null
     }
     let data
     if (isEdit.value) {
@@ -247,42 +250,5 @@ async function submit() {
   color: #8c939d;
   font-size: 13px;
   line-height: 1.6;
-}
-
-.map-block {
-  width: 100%;
-}
-
-.map-box {
-  width: 100%;
-  height: 260px;
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  position: relative;
-  overflow: hidden;
-}
-
-.map-tip {
-  color: #909399;
-  font-size: 13px;
-}
-
-.map-box .map-tip {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.map-line {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 8px 0;
-}
-
-.map-manual {
-  display: flex;
-  gap: 10px;
 }
 </style>
