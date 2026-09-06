@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
+from app.core.config import JWT_EXPIRE_MINUTES
 from app.core.response import BizError, ok
 from app.core.security import (
     blacklist_token,
@@ -21,7 +22,7 @@ from app.core.security import (
     verify_password,
 )
 from app.db import get_session
-from app.models import User
+from app.models import Comment, Content, User
 from app.schemas import ChangePasswordIn, LoginIn, ProfileUpdateIn, RegisterIn
 
 router = APIRouter(prefix="/api/user", tags=["用户认证"])
@@ -37,6 +38,45 @@ if not logger.handlers:
 _LOGIN_MAX_FAILS = 5            # 连续失败阈值
 _LOGIN_LOCK_SECONDS = 15 * 60   # 触发阈值后锁定 15 分钟
 _login_failures: dict[str, dict] = {}
+
+
+# ---------- 密码强度校验 ----------
+# 常见弱密码黑名单（小写比对）
+_WEAK_PASSWORDS = {
+    "123456", "1234567", "12345678", "123456789", "1234567890",
+    "password", "password1", "123456a", "111111", "000000",
+    "abc123", "qwerty", "iloveyou", "admin123", "root123",
+    "11111111", "aaaaaa", "a123456", "123123", "666666",
+}
+
+
+def _validate_password_strength(password: str, username: str = "") -> str:
+    """校验密码强度，返回错误文案；通过则返回空串。"""
+    pwd = password or ""
+    # 弱密码字典
+    if pwd.lower() in _WEAK_PASSWORDS:
+        return "密码过于常见，请更换"
+    # 与用户名相同
+    if username and pwd == username:
+        return "密码不能与用户名相同"
+    # 长度建议：虽然 Pydantic 允许 6 位，但 6-7 位提示强度不足
+    if len(pwd) < 8:
+        return "密码长度建议至少 8 位"
+    # 必须同时包含字母和数字
+    has_alpha = any(c.isalpha() for c in pwd)
+    has_digit = any(c.isdigit() for c in pwd)
+    if not (has_alpha and has_digit):
+        return "密码需同时包含字母和数字"
+    # 禁止连续/重复字符（如 aaa、1234、abcd）
+    def is_sequential(s: str) -> bool:
+        for i in range(len(s) - 2):
+            a, b, c = s[i], s[i + 1], s[i + 2]
+            if b.isalnum() and c.isalnum() and (ord(b) - ord(a) == ord(c) - ord(b) == 1):
+                return True
+        return False
+    if is_sequential(pwd.lower()):
+        return "密码不能包含连续字符（如 1234、abcd）"
+    return ""
 
 
 def _client_ip(request: Request) -> str:
@@ -74,6 +114,43 @@ def _clear_login_failure(username: str, ip: str) -> None:
     _login_failures.pop(f"{username}:{ip}", None)
 
 
+# ---------- 接口请求体模型（本模块内联定义，不依赖后端F的 schemas.py） ----------
+class RegisterConfirmIn(RegisterIn):
+    """注册请求体：在 RegisterIn 基础上增加确认密码字段。"""
+
+    confirm_password: str = Field(min_length=1, max_length=64, description="再次输入密码")
+
+
+class ChangePasswordConfirmIn(ChangePasswordIn):
+    """改密码请求体：在 ChangePasswordIn 基础上增加确认新密码字段。"""
+
+    confirm_password: str = Field(min_length=1, max_length=64, description="再次输入新密码")
+
+
+class ChangeUsernameIn(BaseModel):
+    """修改用户名请求体：需密码确认，新用户名遵守白名单。"""
+
+    new_username: str = Field(
+        min_length=2,
+        max_length=30,
+        pattern=r"^[a-zA-Z0-9_-]+$",
+        description="新登录账号，2-30位，仅字母数字下划线中横线",
+    )
+    password: str = Field(min_length=1, max_length=64, description="当前密码确认")
+
+
+class DeleteAccountIn(BaseModel):
+    """注销账号请求体：需二次输入密码确认。"""
+
+    password: str = Field(min_length=1, max_length=64, description="当前密码确认")
+
+
+class BatchUsersIn(BaseModel):
+    """批量查询用户请求体：传 id 列表，一次取回，避免 N+1 查询。"""
+
+    ids: list[int] = Field(min_length=1, max_length=100, description="用户 id 列表，单次最多100个")
+
+
 def user_public(user: User) -> dict:
     """对外暴露的用户信息（去掉密码哈希），注册/登录/me/更新资料共用同一结构。"""
     return {
@@ -85,11 +162,32 @@ def user_public(user: User) -> dict:
     }
 
 
+def user_detail(user: User, session: Session) -> dict:
+    """用户公开信息 + 发布内容数/评论数（个人主页用）。"""
+    from sqlalchemy import func
+
+    content_count = session.exec(
+        select(func.count()).select_from(Content).where(Content.author_id == user.id)
+    ).one()
+    comment_count = session.exec(
+        select(func.count()).select_from(Comment).where(Comment.author_id == user.id)
+    ).one()
+    data = user_public(user)
+    data["content_count"] = content_count
+    data["comment_count"] = comment_count
+    return data
+
+
 @router.post("/register", summary="注册")
-def register(data: RegisterIn, request: Request, session: Session = Depends(get_session)):
+def register(data: RegisterConfirmIn, request: Request, session: Session = Depends(get_session)):
+    if data.password != data.confirm_password:
+        raise BizError(1009, "两次输入的密码不一致")
     exists = session.exec(select(User).where(User.username == data.username)).first()
     if exists:
         raise BizError(1002, "该用户名已被注册")
+    weak_msg = _validate_password_strength(data.password, data.username)
+    if weak_msg:
+        raise BizError(1008, weak_msg)
     user = User(
         username=data.username,
         nickname=data.nickname,
@@ -101,7 +199,10 @@ def register(data: RegisterIn, request: Request, session: Session = Depends(get_
     logger.info("注册成功 username=%s ip=%s", data.username, _client_ip(request))
     # 注册即登录：直接签发 token，前端无需再调用登录接口
     token = create_token(user.id)
-    return ok({"token": token, "user": user_public(user)}, "注册成功")
+    return ok(
+        {"token": token, "expires_in": JWT_EXPIRE_MINUTES * 60, "user": user_public(user)},
+        "注册成功",
+    )
 
 
 @router.post("/login", summary="登录")
@@ -117,12 +218,15 @@ def login(data: LoginIn, request: Request, session: Session = Depends(get_sessio
     _clear_login_failure(data.username, ip)
     logger.info("登录成功 username=%s ip=%s", data.username, ip)
     token = create_token(user.id)
-    return ok({"token": token, "user": user_public(user)}, "登录成功")
+    return ok(
+        {"token": token, "expires_in": JWT_EXPIRE_MINUTES * 60, "user": user_public(user)},
+        "登录成功",
+    )
 
 
 @router.get("/me", summary="当前登录用户")
-def me(user: User = Depends(get_current_user)):
-    return ok(user_public(user))
+def me(session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+    return ok(user_detail(user, session))
 
 
 @router.get("/check-username", summary="检查用户名是否可用")
@@ -161,6 +265,17 @@ def list_users(
     })
 
 
+@router.post("/batch", summary="批量查询用户公开信息")
+def batch_users(data: BatchUsersIn, session: Session = Depends(get_session)):
+    """按 id 列表批量取用户公开信息，供内容/评论模块批量填充作者。
+
+    一次查询替代循环 N 次 GET /{user_id}，避免 N+1 问题。
+    不存在的 id 自动跳过，返回顺序不保证与请求一致。
+    """
+    users = session.exec(select(User).where(User.id.in_(data.ids))).all()
+    return ok({"list": [user_public(u) for u in users]})
+
+
 @router.post("/logout", summary="登出")
 def logout(request: Request, user: User = Depends(get_current_user)):
     """将当前 token 加入黑名单，使其立即失效。"""
@@ -189,7 +304,7 @@ def update_profile(
 
 @router.put("/password", summary="修改密码")
 def change_password(
-    data: ChangePasswordIn,
+    data: ChangePasswordConfirmIn,
     request: Request,
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
@@ -198,6 +313,11 @@ def change_password(
         raise BizError(1003, "原密码不正确")
     if data.old_password == data.new_password:
         raise BizError(1006, "新密码不能与原密码相同")
+    if data.new_password != data.confirm_password:
+        raise BizError(1009, "两次输入的新密码不一致")
+    weak_msg = _validate_password_strength(data.new_password, user.username)
+    if weak_msg:
+        raise BizError(1008, weak_msg)
     user.password_hash = hash_password(data.new_password)
     session.add(user)
     session.commit()
@@ -206,24 +326,6 @@ def change_password(
     blacklist_token(token)
     logger.info("修改密码成功 user_id=%s ip=%s", user.id, _client_ip(request))
     return ok(None, "密码修改成功，请用新密码重新登录")
-
-
-class DeleteAccountIn(BaseModel):
-    """注销账号请求体：需二次输入密码确认。"""
-
-    password: str = Field(min_length=1, max_length=64, description="当前密码确认")
-
-
-class ChangeUsernameIn(BaseModel):
-    """修改用户名请求体：需密码确认，新用户名遵守白名单。"""
-
-    new_username: str = Field(
-        min_length=2,
-        max_length=30,
-        pattern=r"^[a-zA-Z0-9_-]+$",
-        description="新登录账号，2-30位，仅字母数字下划线中横线",
-    )
-    password: str = Field(min_length=1, max_length=64, description="当前密码确认")
 
 
 @router.patch("/me/username", summary="修改用户名")
@@ -314,10 +416,11 @@ def user_stats(
 def get_user(user_id: int, session: Session = Depends(get_session)):
     """供内容模块展示作者昵称/头像使用，不返回敏感字段。
 
+    额外返回 content_count / comment_count（个人主页统计）。
     注意：动态路径 {user_id} 必须放在所有静态路径(/list /stats 等)之后，
     否则 FastAPI 会把 list/stats 当成 user_id 匹配。
     """
     user = session.get(User, user_id)
     if user is None:
         raise BizError(1005, "用户不存在")
-    return ok(user_public(user))
+    return ok(user_detail(user, session))
