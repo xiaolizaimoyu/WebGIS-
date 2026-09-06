@@ -189,3 +189,92 @@ Query：`page`（默认1）、`size`（默认20，最大100）
 | 2003 | 只能编辑/删除自己发布的内容（非作者操作） |
 | 2004 | 子分类 category 不合法（不在该类型白名单内） |
 | 400 | 参数校验失败（msg 为具体原因，如经纬度未成对提交） |
+
+---
+
+## 互动模块（点赞 / 收藏 / 关注）
+
+前缀：`/api/social`，均需登录（鉴权）。
+
+### 点赞
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/social/likes/{content_id}` | 点赞/取消点赞（切换），返回 `{liked, like_count}` |
+| GET | `/api/social/likes/check/{content_id}` | 检查是否已点赞，返回 `{liked}` |
+| GET | `/api/social/likes/mine` | 我点赞的内容列表（分页） |
+
+### 收藏
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/social/favorites/{content_id}` | 收藏/取消收藏（切换），返回 `{favorited}` |
+| GET | `/api/social/favorites/check/{content_id}` | 检查是否已收藏 |
+| GET | `/api/social/favorites/mine` | 我的收藏列表（分页） |
+
+### 关注
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/social/follows/{user_id}` | 关注/取消关注（切换），返回 `{following}` |
+| GET | `/api/social/follows/followers/{user_id}` | 某用户的粉丝列表 |
+| GET | `/api/social/follows/following/{user_id}` | 某用户关注的人列表 |
+
+---
+
+## 积分与签到模块
+
+前缀：`/api/points`，均需登录。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/points/sign/do` | 每日签到，返回 `{signed, points, bonus, continuous_days, total_points}` |
+| GET | `/api/points/sign/status` | 签到状态，返回 `{signed_today, continuous_days, total_points, recent_records}` |
+| GET | `/api/points/points/log` | 积分流水列表（分页），返回 `{total, balance, items}` |
+
+签到规则：每日 +10 积分，连续 7 天额外 +20 奖励。
+
+---
+
+## 积分商城模块
+
+前缀：`/api/mall`。
+
+| 方法 | 路径 | 说明 | 鉴权 |
+|---|---|---|---|
+| GET | `/api/mall/goods` | 商品列表（分页，可按 category 筛选） | 否 |
+| GET | `/api/mall/goods/{goods_id}` | 商品详情 | 否 |
+| POST | `/api/mall/exchange/{goods_id}` | 用积分兑换商品，扣减积分并生成订单 | 是 |
+| GET | `/api/mall/orders/mine` | 我的兑换订单（分页） | 是 |
+
+---
+
+## 通知模块
+
+前缀：`/api/notifications`，均需登录。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/notifications` | 通知列表（分页，支持 `only_unread=true` 只看未读） |
+| POST | `/api/notifications/{notify_id}/read` | 标记单条通知为已读 |
+| POST | `/api/notifications/read-all` | 全部标记为已读，返回 `{marked}` |
+
+通知类型：`comment`（评论）、`like`（点赞）、`system`（系统）、`follow`（关注）。
+
+---
+
+## 数据库表结构（共 11 张表）
+
+| 表名 | 说明 | 关键字段 |
+|---|---|---|
+| `users` | 用户 | id, username, nickname, avatar, password_hash, points, created_at |
+| `contents` | 内容 | id, title, body, type, category, images, longitude, latitude, view_count, like_count, author_id |
+| `comments` | 评论 | id, content_id, author_id, body, created_at |
+| `likes` | 点赞 | id, user_id, content_id（联合唯一） |
+| `favorites` | 收藏 | id, user_id, content_id（联合唯一） |
+| `follows` | 关注 | id, follower_id, following_id（联合唯一） |
+| `notifications` | 通知 | id, user_id, type, title, body, is_read, related_id |
+| `points_log` | 积分流水 | id, user_id, change, balance_before, balance_after, reason |
+| `sign_records` | 签到记录 | id, user_id, sign_date（联合唯一）, points, continuous_days |
+| `mall_goods` | 商城商品 | id, name, description, image, points_price, stock, status, category |
+| `orders` | 兑换订单 | id, user_id, goods_id, goods_name, points_cost, status |
