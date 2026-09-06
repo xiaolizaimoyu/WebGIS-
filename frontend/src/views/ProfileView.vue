@@ -94,16 +94,21 @@ onMounted(loadData)
                 <div class="sign-title">每日签到</div>
                 <div class="sign-desc">连续签到 <span class="highlight">{{ continuousDays }}</span> 天 · 总积分 <span class="highlight">{{ totalPoints }}</span></div>
               </div>
-              <el-button
-                type="primary"
-                size="large"
-                :class="{ signed: signedToday }"
-                :disabled="signedToday"
-                :loading="store.signLoading"
-                @click="handleSign"
-              >
-                {{ signedToday ? '✅ 今日已签' : '立即签到 +10' }}
-              </el-button>
+              <div class="sign-actions">
+                <el-button
+                  type="primary"
+                  size="large"
+                  :class="{ signed: signedToday }"
+                  :disabled="signedToday"
+                  :loading="store.signLoading"
+                  @click="handleSign"
+                >
+                  {{ signedToday ? '✅ 今日已签' : '立即签到 +10' }}
+                </el-button>
+                <el-button size="large" @click="router.push('/mall')">
+                  🎁 去积分商城
+                </el-button>
+              </div>
             </div>
 
             <div class="sign-calendar">
@@ -307,6 +312,12 @@ onMounted(loadData)
 .sign-banner .el-button.signed {
   background: #67c23a;
   border-color: #67c23a;
+}
+
+.sign-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .sign-calendar {

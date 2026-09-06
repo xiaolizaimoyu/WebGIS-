@@ -31,7 +31,8 @@ const navMenus = [
   { path: '/questions', label: '校园问答', icon: '❓' },
   { path: '/materials', label: '学习资料', icon: '📚' },
   { path: '/carpool', label: '组队拼车', icon: '🚗' },
-  { path: '/lost-found', label: '失物招领', icon: '🔍' }
+  { path: '/lost-found', label: '失物招领', icon: '🔍' },
+  { path: '/mall', label: '积分商城', icon: '🎁' }
 ]
 
 function isActive(path) {
@@ -46,6 +47,8 @@ function onCommand(cmd) {
     router.push(`/user/profile/${store.userInfo?.id || 1}`)
   } else if (cmd === 'mine') {
     router.push('/mine')
+  } else if (cmd === 'mall') {
+    router.push('/mall')
   } else if (cmd === 'logout') {
     store.logout()
     ElMessage.success('已退出登录')
@@ -189,6 +192,9 @@ onMounted(() => {
               </el-dropdown-item>
               <el-dropdown-item command="mine">
                 <span>📝 我的发布</span>
+              </el-dropdown-item>
+              <el-dropdown-item command="mall">
+                <span>🎁 积分商城</span>
               </el-dropdown-item>
               <el-dropdown-item divided command="logout">
                 <span>🚪 退出登录</span>
