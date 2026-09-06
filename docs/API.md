@@ -48,10 +48,14 @@
 成功 data：`{ "token": "...", "expires_in": 604800, "user": {...} }`（注册即登录）
 错误：用户名被占用 `code: 1002`；密码强度不足 `code: 1008`；两次密码不一致 `code: 1009`。
 
+**GET /api/user/captcha** — 获取登录图形验证码
+无需登录。成功 data：`{ "captcha_id": "32位标识", "image": "SVG base64 dataURL", "expires_in": 300 }`
+说明：验证码一次性有效（无论对错都作废）、5 分钟过期、不区分大小写。前端对接详见 [验证码对接文档](./验证码对接文档.md)。
+
 **POST /api/user/login** — 登录
-请求体：`{ "username": "", "password": "" }`
+请求体：`{ "username": "", "password": "", "captcha_id": "获取验证码返回的标识", "captcha_code": "4位验证码" }`
 成功 data：`{ "token": "...", "expires_in": 604800, "user": {...} }`
-错误：用户名或密码错误 `code: 1001`；连续失败 5 次锁定 15 分钟 `code: 1004`。
+错误：验证码错误或已过期 `code: 1010`；用户名或密码错误 `code: 1001`；连续失败 5 次锁定 15 分钟 `code: 1004`。
 
 **POST /api/user/logout** — 登出（鉴权）
 成功 data：`null`。当前 token 立即失效（加入黑名单）。
