@@ -187,6 +187,19 @@ class BatchUsersIn(BaseModel):
     ids: list[int] = Field(min_length=1, max_length=100, description="用户 id 列表，单次最多100个")
 
 
+class LoginCaptchaIn(LoginIn):
+    """登录请求体：在 LoginIn 基础上增加图形验证码字段。"""
+
+    captcha_id: str = Field(
+        min_length=8, max_length=64,
+        description="GET /api/user/captcha 返回的验证码标识，原样传回",
+    )
+    captcha_code: str = Field(
+        min_length=4, max_length=4,
+        description="用户输入的 4 位验证码，不区分大小写",
+    )
+
+
 def user_public(user: User) -> dict:
     """对外暴露的用户信息（去掉密码哈希），注册/登录/me/更新资料共用同一结构。"""
     return {
@@ -256,8 +269,13 @@ def register(data: RegisterConfirmIn, request: Request, session: Session = Depen
 
 
 @router.post("/login", summary="登录")
-def login(data: LoginIn, request: Request, session: Session = Depends(get_session)):
+def login(data: LoginCaptchaIn, request: Request, session: Session = Depends(get_session)):
     ip = _client_ip(request)
+    # 验证码前置校验：拦截机器人与脚本批量试密码。
+    # 校验失败不消耗登录限流计数（限流针对"真人输错密码"场景）。
+    if not _captcha_verify(data.captcha_id, data.captcha_code):
+        logger.info("登录验证码错误 username=%s ip=%s", data.username, ip)
+        raise BizError(1010, "验证码错误或已过期，请刷新后重试")
     _check_login_limit(data.username, ip)
     user = session.exec(select(User).where(User.username == data.username)).first()
     # 账号或密码错误统一文案，避免泄露哪个不对
