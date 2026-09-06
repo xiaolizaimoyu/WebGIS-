@@ -23,8 +23,10 @@ from app.schemas import CommentIn, ContentIn
 
 router = APIRouter(prefix="/api", tags=["内容与评论"])
 
-# 内容一级分类，见 docs/API.md（含智慧校园新增：food 美食分享 / lost 失物招领）
-VALID_TYPES = {"activity", "meeting", "news", "ad", "food", "lost"}
+# 内容一级分类，见 docs/API.md
+# 已下线「校园活动 activity / 校园广告 ad」两类（功能与美食/失物/动态重复），
+# 现保留：meeting 会议 / news 动态 / food 美食分享 / lost 失物招领。
+VALID_TYPES = {"meeting", "news", "food", "lost"}
 
 
 def _ensure_valid_type(content_type: str) -> None:

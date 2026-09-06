@@ -28,15 +28,18 @@ class User(SQLModel, table=True):
 
 
 class Content(SQLModel, table=True):
-    """内容表：活动 activity / 会议 meeting / 动态 news / 广告 ad，由 type 区分"""
+    """内容表：会议 meeting / 动态 news / 美食 food / 失物招领 lost，由 type 区分。
+
+    注：已下线「校园活动 activity / 校园广告 ad」两类（功能与其他模块重复）。
+    """
 
     __tablename__ = "contents"
 
     id: Optional[int] = Field(default=None, primary_key=True)
     title: str = Field(description="标题")
     body: str = Field(description="正文")
-    type: str = Field(index=True, description="activity | meeting | news | ad")
-    category: Optional[str] = Field(default=None, description="二级子分类，如广告：闲置/求助/宣传")
+    type: str = Field(index=True, description="meeting | news | food | lost")
+    category: Optional[str] = Field(default=None, description="二级子分类（可空，预留扩展）")
     images: List[str] = Field(
         default_factory=list,
         sa_column=Column(JSON),

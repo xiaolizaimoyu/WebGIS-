@@ -22,7 +22,7 @@ class LoginIn(BaseModel):
 class ContentIn(BaseModel):
     title: str = Field(min_length=1, max_length=80)
     body: str = Field(min_length=1, max_length=5000)
-    type: str = Field(description="activity | meeting | news | ad | food | lost")
+    type: str = Field(description="meeting | news | food | lost（已下线 activity / ad）")
     category: Optional[str] = Field(default=None, max_length=20)
     images: List[str] = Field(default_factory=list)
     # 地图选点坐标（可空；两端需同时给才生效）
