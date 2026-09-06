@@ -126,6 +126,25 @@ const routes = [
         component: () => import('@/views/LostFoundDetailView.vue'),
         meta: { title: '失物招领详情' }
       },
+      // ====== 积分商城模块 ======
+      {
+        path: 'mall',
+        name: 'mall',
+        component: () => import('@/views/MallView.vue'),
+        meta: { title: '积分商城' }
+      },
+      {
+        path: 'mall/goods/:id',
+        name: 'goods-detail',
+        component: () => import('@/views/GoodsDetailView.vue'),
+        meta: { title: '商品详情' }
+      },
+      {
+        path: 'mall/records',
+        name: 'my-redeem',
+        component: () => import('@/views/MyRedeemView.vue'),
+        meta: { title: '我的兑换', requiresAuth: true }
+      },
       // ====== 用户系统 ======
       {
         path: 'user/profile/:id',
