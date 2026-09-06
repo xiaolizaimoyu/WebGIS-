@@ -7,6 +7,7 @@
 """
 import logging
 import time
+import uuid
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
@@ -38,6 +39,41 @@ if not logger.handlers:
 _LOGIN_MAX_FAILS = 5            # 连续失败阈值
 _LOGIN_LOCK_SECONDS = 15 * 60   # 触发阈值后锁定 15 分钟
 _login_failures: dict[str, dict] = {}
+
+
+# ---------- 图形验证码（进程内存储，重启后清零） ----------
+_CAPTCHA_TTL_SECONDS = 5 * 60   # 验证码有效期 5 分钟
+_captcha_store: dict[str, tuple[str, float]] = {}  # captcha_id -> (答案小写, 过期时间戳)
+
+
+def _captcha_purge_expired() -> None:
+    """惰性清理：每次签发前顺手清掉过期验证码，避免内存无限增长。"""
+    now = time.time()
+    expired = [cid for cid, (_, exp) in _captcha_store.items() if exp <= now]
+    for cid in expired:
+        _captcha_store.pop(cid, None)
+
+
+def _captcha_issue() -> tuple[str, str, int]:
+    """签发一个新验证码：生成图片并保存答案，返回 (captcha_id, 图片dataURL, 有效期秒)。"""
+    _captcha_purge_expired()
+    from app.core.captcha import generate_captcha
+
+    text, image = generate_captcha()
+    captcha_id = uuid.uuid4().hex
+    _captcha_store[captcha_id] = (text.lower(), time.time() + _CAPTCHA_TTL_SECONDS)
+    return captcha_id, image, _CAPTCHA_TTL_SECONDS
+
+
+def _captcha_verify(captcha_id: str, code: str) -> bool:
+    """校验验证码：一次性使用（无论对错都销毁），忽略大小写，过期按失败处理。"""
+    item = _captcha_store.pop(captcha_id, None)
+    if item is None:
+        return False
+    answer, expires_at = item
+    if time.time() > expires_at:
+        return False
+    return (code or "").strip().lower() == answer
 
 
 # ---------- 密码强度校验 ----------
@@ -176,6 +212,20 @@ def user_detail(user: User, session: Session) -> dict:
     data["content_count"] = content_count
     data["comment_count"] = comment_count
     return data
+
+
+@router.get("/captcha", summary="获取图形验证码")
+def get_captcha():
+    """签发一个图形验证码，登录时必须携带。
+
+    返回 {captcha_id, image, expires_in}：
+    - captcha_id：本次验证码的唯一标识，登录时原样传回
+    - image：SVG 图片的 base64 data URL，前端 <img :src> 直接绑定
+    - expires_in：有效期（秒），过期后需重新获取
+    """
+    captcha_id, image, expires_in = _captcha_issue()
+    logger.info("签发验证码 captcha_id=%s", captcha_id)
+    return ok({"captcha_id": captcha_id, "image": image, "expires_in": expires_in})
 
 
 @router.post("/register", summary="注册")
