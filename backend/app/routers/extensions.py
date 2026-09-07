@@ -22,7 +22,7 @@ from app.routers.material_docs import generate_material_file
 from app.routers.post import _get_optional_user
 from app.core.security import get_current_user
 from app.db import get_session
-from app.models import Carpool, User
+from app.models import Carpool, CarpoolApplication, User
 
 router = APIRouter(tags=["扩展模块"])
 
@@ -273,13 +273,64 @@ def list_carpools(keyword: Optional[str] = None, status: Optional[str] = None,
     return ok({"total": total, "page": page, "size": size, "items": items})
 
 
+@router.get("/carpools/my-applications", summary="我的拼车申请列表")
+def my_applications(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=50),
+                    user: User = Depends(get_current_user),
+                    session: Session = Depends(get_session)):
+    """当前用户提交过的全部申请（含拼车标题、状态），供取消/查看使用"""
+    apps = session.exec(
+        select(CarpoolApplication).where(CarpoolApplication.applicant_id == user.id)
+        .order_by(CarpoolApplication.created_at.desc())
+    ).all()
+    items = []
+    for a in apps:
+        c = session.get(Carpool, a.carpool_id)
+        items.append({
+            **_app_to_dict(a),
+            "carpool_title": c.title if c else "拼车已删除",
+            "carpool_status": c.status if c else "deleted",
+            "from": c.from_ if c else "",
+            "to": c.to if c else "",
+            "depart_time": c.depart_time if c else "",
+        })
+    total = len(items)
+    start = (page - 1) * size
+    return ok({"total": total, "page": page, "size": size, "items": items[start:start + size]})
+
+
 @router.get("/carpools/{cid}", summary="拼车详情")
 def get_carpool(cid: int, user: Optional[User] = Depends(_get_optional_user),
                 session: Session = Depends(get_session)):
     c = session.get(Carpool, cid)
     if not c:
         raise BizError(404, "拼车信息不存在")
-    return ok(_carpool_to_dict(c, user))
+    data = _carpool_to_dict(c, user)
+    # 当前用户对该拼车的申请状态（用于"已申请/取消"按钮）
+    my_app = None
+    if user:
+        my_app = session.exec(
+            select(CarpoolApplication).where(
+                CarpoolApplication.carpool_id == cid,
+                CarpoolApplication.applicant_id == user.id,
+            ).order_by(CarpoolApplication.created_at.desc())
+        ).first()
+        if my_app:
+            data["my_application"] = {
+                "id": my_app.id, "status": my_app.status,
+                "people_count": my_app.people_count,
+            }
+    # 车主视角：待确认申请数
+    if user and user.id == c.author_id:
+        pending = session.exec(
+            select(CarpoolApplication).where(
+                CarpoolApplication.carpool_id == cid,
+                CarpoolApplication.status == "pending",
+            )
+        ).all()
+        data["pending_count"] = len(pending)
+    else:
+        data["pending_count"] = 0
+    return ok(data)
 
 
 @router.post("/carpools", summary="发布拼车（需登录，含完整校验）")
@@ -341,15 +392,17 @@ def delete_carpool(cid: int, user: User = Depends(get_current_user),
     return ok({"id": cid}, "删除成功")
 
 
-@router.post("/carpools/{cid}/apply", summary="申请加入拼车（需登录）")
+@router.post("/carpools/{cid}/apply", summary="申请加入拼车（需登录，待车主确认）")
 def apply_carpool(cid: int, data: dict, user: User = Depends(get_current_user),
                   session: Session = Depends(get_session)):
-    """申请加入：校验手机号/人数，成功后剩余座位扣减，满员置为 full"""
+    """提交申请：不直接扣座位，进入待确认；车主同意后才扣减剩余座位"""
     c = session.get(Carpool, cid)
     if not c:
         raise BizError(404, "拼车信息不存在")
     if c.author_id == user.id:
         raise BizError(400, "不能申请自己发布的拼车")
+    if c.status == "closed":
+        raise BizError(400, "该拼车已关闭")
     if c.seats_left <= 0:
         raise BizError(400, "该拼车已满员")
     name = (data.get("name") or "").strip()
@@ -360,15 +413,114 @@ def apply_carpool(cid: int, data: dict, user: User = Depends(get_current_user),
         people = int(data.get("people_count", 1))
     except (TypeError, ValueError):
         people = 1
-    if not 1 <= people <= c.seats_left:
-        raise BizError(400, f"申请人数需在 1-{c.seats_left} 之间")
+    if not 1 <= people <= 7:
+        raise BizError(400, "申请人数需在 1-7 之间")
     if not PHONE_RE.match(phone):
         raise BizError(400, "手机号格式不正确，需为 11 位数字")
-    c.seats_left -= people
+    # 同一用户对同一拼车只能有一条待确认申请
+    existing = session.exec(
+        select(CarpoolApplication).where(
+            CarpoolApplication.carpool_id == cid,
+            CarpoolApplication.applicant_id == user.id,
+            CarpoolApplication.status == "pending",
+        )
+    ).first()
+    if existing:
+        raise BizError(400, "您已提交过申请，等待车主确认中")
+    app = CarpoolApplication(
+        carpool_id=cid, applicant_id=user.id, applicant_name=name,
+        phone=phone, people_count=people, remark=(data.get("remark") or "").strip()[:300],
+        status="pending",
+    )
+    session.add(app)
+    session.commit()
+    session.refresh(app)
+    return ok({"application_id": app.id, "status": "pending"}, "申请已提交，等待车主确认")
+
+
+@router.get("/carpools/{cid}/applications", summary="拼车申请列表（仅车主）")
+def list_applications(cid: int, user: User = Depends(get_current_user),
+                      session: Session = Depends(get_session)):
+    c = session.get(Carpool, cid)
+    if not c:
+        raise BizError(404, "拼车信息不存在")
+    if c.author_id != user.id:
+        raise BizError(403, "只有车主可以查看申请")
+    apps = session.exec(
+        select(CarpoolApplication).where(CarpoolApplication.carpool_id == cid)
+        .order_by(CarpoolApplication.created_at.desc())
+    ).all()
+    return ok({"items": [_app_to_dict(a) for a in apps]})
+
+
+@router.post("/carpools/{cid}/applications/{aid}/approve", summary="同意申请（仅车主，扣座位）")
+def approve_application(cid: int, aid: int, user: User = Depends(get_current_user),
+                        session: Session = Depends(get_session)):
+    c = session.get(Carpool, cid)
+    a = session.get(CarpoolApplication, aid)
+    if not c or not a or a.carpool_id != cid:
+        raise BizError(404, "申请不存在")
+    if c.author_id != user.id:
+        raise BizError(403, "只有车主可以处理申请")
+    if a.status != "pending":
+        raise BizError(400, "该申请已处理")
+    if c.seats_left < a.people_count:
+        raise BizError(400, f"剩余座位不足（剩余 {c.seats_left} 座，申请 {a.people_count} 人）")
+    c.seats_left -= a.people_count
     if c.seats_left == 0:
         c.status = "full"
+    a.status = "approved"
     session.add(c)
+    session.add(a)
     session.commit()
     session.refresh(c)
-    return ok({"seats_left": c.seats_left, "status": c.status}, "申请已提交，等待车主确认")
+    session.refresh(a)
+    return ok({"seats_left": c.seats_left, "status": c.status, "application_status": a.status},
+              "已同意申请，座位已扣减")
+
+
+@router.post("/carpools/{cid}/applications/{aid}/reject", summary="拒绝申请（仅车主）")
+def reject_application(cid: int, aid: int, user: User = Depends(get_current_user),
+                       session: Session = Depends(get_session)):
+    c = session.get(Carpool, cid)
+    a = session.get(CarpoolApplication, aid)
+    if not c or not a or a.carpool_id != cid:
+        raise BizError(404, "申请不存在")
+    if c.author_id != user.id:
+        raise BizError(403, "只有车主可以处理申请")
+    if a.status != "pending":
+        raise BizError(400, "该申请已处理")
+    a.status = "rejected"
+    session.add(a)
+    session.commit()
+    return ok({"application_status": "rejected"}, "已拒绝该申请")
+
+
+@router.post("/carpools/{cid}/applications/{aid}/cancel", summary="取消申请（仅申请人本人）")
+def cancel_application(cid: int, aid: int, user: User = Depends(get_current_user),
+                       session: Session = Depends(get_session)):
+    a = session.get(CarpoolApplication, aid)
+    if not a or a.carpool_id != cid:
+        raise BizError(404, "申请不存在")
+    if a.applicant_id != user.id:
+        raise BizError(403, "只能取消自己的申请")
+    if a.status == "approved":
+        raise BizError(400, "申请已被车主同意，请联系车主处理")
+    if a.status not in ("pending", "rejected"):
+        raise BizError(400, "该申请当前状态不可取消")
+    a.status = "cancelled"
+    session.add(a)
+    session.commit()
+    return ok({"application_status": "cancelled"}, "已取消申请")
+
+
+def _app_to_dict(a: CarpoolApplication) -> dict:
+    return {
+        "id": a.id, "carpool_id": a.carpool_id,
+        "applicant_id": a.applicant_id, "applicant_name": a.applicant_name,
+        "phone": a.phone, "people_count": a.people_count,
+        "remark": a.remark or "", "status": a.status,
+        "created_at": a.created_at.isoformat(),
+    }
+
 

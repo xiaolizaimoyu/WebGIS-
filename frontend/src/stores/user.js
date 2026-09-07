@@ -40,11 +40,17 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('campus_user')
   }
 
-  // 获取签到状态
+  // 获取签到状态：后端返回 snake_case，统一转成前端 camelCase
   async function fetchSignStatus() {
     if (!isLoggedIn.value) return
     try {
-      signStatus.value = await signApi.getSignStatus()
+      const d = await signApi.getSignStatus()
+      signStatus.value = {
+        signedToday: !!d.signed_today,
+        continuousDays: d.continuous_days || 0,
+        totalPoints: d.total_points || 0,
+        recentRecords: d.recent_records || []
+      }
     } catch {
       signStatus.value = getMockSignStatus()
     }
@@ -57,7 +63,17 @@ export const useUserStore = defineStore('user', () => {
     try {
       const result = await signApi.doSign()
       await fetchSignStatus()
-      return result
+      // 后端：重复签到返回 points=0（今日已签到），此时不弹"获得积分"
+      if (result.signed && (result.points || 0) === 0) {
+        return null
+      }
+      return {
+        signed: true,
+        points: result.points || 0,
+        bonus: result.bonus || 0,
+        continuousDays: result.continuous_days || 0,
+        totalPoints: result.total_points || 0
+      }
     } catch {
       // mock 模式：模拟签到成功
       if (!signStatus.value) signStatus.value = getMockSignStatus()
