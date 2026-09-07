@@ -431,6 +431,7 @@ onMounted(() => {
   font-size: 12px;
   color: #606266;
   line-height: 1.4;
+  word-break: break-word;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -532,6 +533,9 @@ onMounted(() => {
   }
   .nav-menu::-webkit-scrollbar {
     display: none;
+  }
+  .notify-dropdown {
+    width: min(360px, calc(100vw - 24px));
   }
 }
 </style>
