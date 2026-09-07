@@ -1,14 +1,16 @@
 <script setup>
-// 组队拼车列表页（归属：前端 C）
+// 组队拼车列表页（前端 C）——支持作者编辑/删除自己的拼车
 import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import * as carpoolApi from '@/api/carpool'
-import { formatTime } from '@/api/const'
 import { getMockCarpools } from '@/utils/mockData'
 import MapComponent from '@/components/MapComponent.vue'
 import WeatherWidget from '@/components/WeatherWidget.vue'
+import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
+const store = useUserStore()
 const mapRef = ref(null)
 
 const list = ref([])
@@ -30,7 +32,30 @@ function toDetail(id) {
   router.push(`/carpool/${id}`)
 }
 
-const mapCenter = ref([116.397428, 39.90923])
+function toEdit(c) {
+  router.push(`/carpool/publish/${c.id}`)
+}
+
+async function removeCarpool(c) {
+  try {
+    await ElMessageBox.confirm(`确定删除「${c.title}」吗？删除后不可恢复。`, '删除拼车', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await carpoolApi.deleteCarpool(c.id)
+    ElMessage.success('删除成功')
+    load()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '删除失败')
+  }
+}
+
+const mapCenter = ref([118.001917, 36.814013])
 const mapMarkers = computed(() => [])
 
 onMounted(load)
@@ -78,6 +103,10 @@ onMounted(load)
             <el-tag :type="c.seats_left > 0 ? 'success' : 'info'" size="small">
               {{ c.seats_left > 0 ? '招募中' : '已满员' }}
             </el-tag>
+            <div v-if="c.is_author" class="op-btns" @click.stop>
+              <el-button size="small" type="primary" plain @click="toEdit(c)">编辑</el-button>
+              <el-button size="small" type="danger" plain @click="removeCarpool(c)">删除</el-button>
+            </div>
           </div>
         </el-card>
 
@@ -86,10 +115,10 @@ onMounted(load)
     </div>
 
     <div class="right-panel">
-      <WeatherWidget city="北京" :use-mock="true" />
+      <WeatherWidget />
       <div class="map-wrapper">
-        <div class="map-header"><span class="map-title">🗺️ 路线地图</span></div>
-        <MapComponent ref="mapRef" :center="mapCenter" :zoom="12" :markers="mapMarkers" height="360px" />
+        <div class="map-header"><span class="map-title">🗺️ 校园地图</span></div>
+        <MapComponent ref="mapRef" :center="mapCenter" :zoom="14" :markers="mapMarkers" height="360px" />
       </div>
       <el-card shadow="never" class="tip-card">
         <div class="tip-title">💡 拼车安全提示</div>
@@ -123,31 +152,18 @@ onMounted(load)
   margin-bottom: 14px; border-radius: 12px; cursor: pointer; transition: all 0.25s;
 }
 .carpool-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(230, 162, 60, 0.15) !important; }
-.route {
-  display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
-}
-.city { font-size: 18px; font-weight: 600; color: #303133; }
-.arrow { font-size: 20px; color: #e6a23c; }
-.info-row {
-  display: flex; gap: 20px; color: #606266; font-size: 13px; margin-bottom: 6px;
-}
-.footer {
-  display: flex; align-items: center; gap: 12px; margin-top: 12px; padding-top: 10px;
-  border-top: 1px solid #f0f2f5;
-}
-.seat-progress { flex: 1; max-width: 160px; }
-.seat-info { font-size: 13px; color: #909399; }
-.map-wrapper {
-  background: #fff; border-radius: 12px; padding: 12px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-}
-.map-header { margin-bottom: 8px; }
-.map-title { font-size: 15px; font-weight: 600; color: #303133; }
+.route { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600; color: #303133; }
+.city { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arrow { color: #e6a23c; }
+.info-row { display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; color: #909399; }
+.footer { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.seat-progress { flex: 1; }
+.seat-info { font-size: 13px; color: #606266; }
+.op-btns { display: flex; gap: 6px; margin-left: auto; }
 .tip-card { border-radius: 12px; }
-.tip-title { font-weight: 600; margin-bottom: 8px; color: #303133; }
-.tip-card p { font-size: 13px; color: #606266; line-height: 1.8; margin: 0; }
-@media (max-width: 992px) {
-  .page-layout { flex-direction: column; }
-  .right-panel { width: 100%; position: static; }
-}
+.tip-title { font-weight: 600; color: #303133; margin-bottom: 8px; }
+.tip-card p { font-size: 13px; color: #606266; margin: 4px 0; }
+.map-wrapper { border-radius: 12px; overflow: hidden; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06); }
+.map-header { padding: 10px 14px; background: #fff; border-bottom: 1px solid #f0f0f0; }
+.map-title { font-weight: 600; color: #303133; }
 </style>

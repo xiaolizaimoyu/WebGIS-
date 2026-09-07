@@ -3,18 +3,22 @@
 用途：给空数据库填充一批"AI 模拟数据"，让首页/详情/评论/商城/积分有内容可演示。
 
 运行（在 backend 目录下）：
-    .venv\\Scripts\\python -m app.seed
+    .venv\\Scripts\\python -m app.seed             # 默认：保留已有积分/签到，只补缺失数据
+    .venv\\Scripts\\python -m app.seed --reset    # 强制：删除全部演示数据后重建
 
 行为：
-- 幂等：每次运行会先删除上一批"演示数据"再重建，可重复执行；
+- 默认模式：若 demo 用户已存在，保留其积分/签到/流水/帖子（签到积分不会被重置），
+  仅补齐缺失的商城商品与拼车数据；空库时自动全量初始化。
+- --reset：删除上一批全部演示数据（含积分/签到记录）再重建，可重复执行；
   演示账号统一密码 123456（登录答辩用），前缀 demo_ 便于识别。
 - 只清理演示数据，绝不触碰真实用户/帖子。
 - 自动在 uploads/ 生成若干渐变占位图 demo_*.png，帖子带图可正常显示。
-- 覆盖 11 张表：users / contents / comments / likes / favorites / follows /
-  notifications / points_log / sign_records / mall_goods / orders。
+- 覆盖 12 张表：users / contents / comments / likes / favorites / follows /
+  notifications / points_log / sign_records / mall_goods / orders / carpools。
 """
 import math
 import struct
+import sys
 import zlib
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -24,7 +28,7 @@ from sqlmodel import Session, select
 from app.core.config import UPLOAD_DIR
 from app.core.security import hash_password
 from app.db import engine
-from app.models import (Comment, Content, Favorite, Follow, Like, MallGoods,
+from app.models import (Carpool, Comment, Content, Favorite, Follow, Like, MallGoods,
                         Notification, Order, PointsLog, SignRecord, User)
 
 # ---------------- 配置 ----------------
@@ -73,6 +77,20 @@ COMMENTS = [
     (6, 2, "麻辣香锅确实好吃，中辣够味！"),
     (9, 4, "保温杯是什么牌子的？我好像看到过。"),
 ]
+
+# 组队拼车演示数据（from 为 SQL 关键字，常量名用 frm）
+# (发布者序号, 标题, 出发地, 目的地, 出发时间, 座位, 人均费用, 手机号, 备注)
+CARPOOLS = [
+    (0, "周末去济南火车站拼车", "学校东门", "济南站", "2026-09-12 08:00", 4, 50, "13800001001",
+     "AA制，人均约50元，含油费过路费。"),
+    (1, "周五晚回淄博拼车", "学校北门", "淄博站", "2026-09-11 18:00", 3, 30, "13900002002",
+     "下班时间出发，可带小件行李。"),
+    (2, "国庆去青岛玩拼车", "学校南门", "青岛五四广场", "2026-10-01 07:00", 5, 120, "13700003003",
+     "三天两夜，行程可商量，有学生证优先。"),
+    (3, "去高铁站拼车（随时出发）", "学校北门", "淄博北站", "2026-09-10 15:00", 4, 40, "13600004004",
+     "赶高铁拼车，随时可走，后备箱能放大行李箱。"),
+]
+
 
 # 积分商城演示商品
 MALL_GOODS = [
@@ -138,12 +156,36 @@ def make_placeholder_images() -> list:
 
 
 # ---------------- 主流程 ----------------
-def run() -> None:
+def run(reset: bool = False) -> None:
     with Session(engine) as session:
         now = datetime.now()
 
         # 1) 清掉上一批演示数据
         demo_users = session.exec(select(User).where(User.username.like("demo\\_%", escape="\\"))).all()
+
+        # 0) 保护：非 --reset 且 demo 用户已存在 -> 保留积分/签到/帖子，只补缺失的商城与拼车
+        if demo_users and not reset:
+            old_goods = session.exec(select(MallGoods).where(MallGoods.name.like("演示%"))).all()
+            has_carpool = session.exec(select(Carpool)).first()
+            if not old_goods:
+                for name, desc, price, stock, category, image in MALL_GOODS:
+                    session.add(MallGoods(name=name, description=desc, image=image,
+                                          points_price=price, stock=stock, status="on", category=category))
+            if not has_carpool:
+                for i, title, frm, to, depart_time, seats, price, phone, note in CARPOOLS:
+                    session.add(Carpool(
+                        title=title, from_=frm, to=to, depart_time=depart_time,
+                        seats_total=seats, seats_left=seats, price_per_person=price,
+                        phone=phone, note=note, author_id=demo_users[i % len(demo_users)].id,
+                        author_name=demo_users[i % len(demo_users)].nickname,
+                        status="recruiting",
+                        created_at=now - timedelta(hours=3 * (i + 1)),
+                    ))
+            session.commit()
+            print("已存在演示用户：保留积分/签到数据，仅补齐缺失数据。")
+            print("如需重置演示数据（含积分/签到），请运行：python -m app.seed --reset")
+            return
+
         demo_ids = [u.id for u in demo_users]
         if demo_ids:
             for model in [Like, Favorite, Notification, PointsLog, SignRecord, Order]:
@@ -298,9 +340,24 @@ def run() -> None:
             ))
         session.commit()
 
+        # 12) 演示拼车（carpools 表）
+        carpool_list = []
+        for i, title, frm, to, depart_time, seats, price, phone, note in CARPOOLS:
+            c = Carpool(
+                title=title, from_=frm, to=to, depart_time=depart_time,
+                seats_total=seats, seats_left=seats, price_per_person=price,
+                phone=phone, note=note, author_id=users[i % len(users)].id,
+                author_name=users[i % len(users)].nickname,
+                status="recruiting",
+                created_at=now - timedelta(hours=3 * (i + 1)),
+            )
+            session.add(c)
+            carpool_list.append(c)
+        session.commit()
+
         # 13) 汇总
         print("=" * 50)
-        print("演示数据已生成（11张表全部填充）")
+        print("演示数据已生成（12张表全部填充）")
         print(f"  演示账号 {len(users)} 个（密码统一 {DEMO_PASSWORD}）：")
         for u in users:
             print(f"    - {u.username}（{u.nickname}）积分: {u.points}")
@@ -308,6 +365,7 @@ def run() -> None:
         print(f"  点赞 {len(users) * 3} 条，收藏 {len(users) * 2} 条，关注 4 条")
         print(f"  签到记录 {len(users) * 3} 条，积分流水 {len(users) * 3 + 2} 条")
         print(f"  商城商品 {len(goods_list)} 个，兑换订单 2 条")
+        print(f"  拼车 {len(CARPOOLS)} 条")
         print(f"  通知 {len(users) * 2} 条")
         print(f"  占位图 {len(img_urls)} 张（uploads/demo_*.png）")
         print("=" * 50)
@@ -315,4 +373,4 @@ def run() -> None:
 
 
 if __name__ == "__main__":
-    run()
+    run(reset="--reset" in sys.argv)

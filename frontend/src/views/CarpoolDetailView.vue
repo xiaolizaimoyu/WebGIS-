@@ -1,10 +1,9 @@
 <script setup>
-// 拼车详情页（归属：前端 C）——含全局申请弹窗整合
+// 拼车详情页（前端 C）——作者可编辑/删除；申请需 11 位手机号，成功后刷新座位
 import { onMounted, ref, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import * as carpoolApi from '@/api/carpool'
-import { formatTime } from '@/api/const'
 import { getMockCarpoolDetail } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 import { useDialogStore } from '@/stores/dialog'
@@ -17,7 +16,7 @@ const dialog = useDialogStore()
 const carpoolId = Number(route.params.id)
 const carpool = ref(null)
 
-// 申请弹窗（全局整合：使用 dialog store 统一管理）
+// 申请弹窗
 const applyVisible = ref(false)
 const applyForm = reactive({
   name: '',
@@ -35,7 +34,7 @@ async function loadDetail() {
   }
 }
 
-// 打开申请弹窗 —— 全局整合入口
+// 打开申请弹窗
 function openApplyDialog() {
   if (!store.isLoggedIn) {
     ElMessage.warning('请先登录后再申请拼车')
@@ -46,7 +45,6 @@ function openApplyDialog() {
     ElMessage.warning('该拼车已满员')
     return
   }
-  // 预填用户信息
   applyForm.name = store.userInfo?.nickname || ''
   applyForm.phone = ''
   applyForm.people_count = 1
@@ -59,8 +57,13 @@ async function submitApply() {
     ElMessage.warning('请填写姓名')
     return
   }
-  if (!applyForm.phone.trim()) {
+  const phone = applyForm.phone.trim()
+  if (!phone) {
     ElMessage.warning('请填写联系电话')
+    return
+  }
+  if (!/^1\d{10}$/.test(phone)) {
+    ElMessage.warning('手机号需为 11 位数字（如 13812345678）')
     return
   }
   applying.value = true
@@ -68,25 +71,41 @@ async function submitApply() {
     await carpoolApi.applyCarpool(carpoolId, { ...applyForm })
     ElMessage.success('申请已提交，等待车主确认')
     applyVisible.value = false
-    // 全局弹窗提示
+    loadDetail() // 刷新剩余座位
     dialog.open({
       title: '申请成功',
       content: `您已成功申请「${carpool.value.title}」，车主确认后会通过消息通知您。`,
       type: 'success',
       confirmText: '知道了'
     })
-  } catch {
-    // mock 模式
-    ElMessage.success('申请已提交（模拟）')
-    applyVisible.value = false
-    dialog.open({
-      title: '申请成功',
-      content: `您已成功申请「${carpool.value.title}」，车主确认后会通过消息通知您。`,
-      type: 'success',
-      confirmText: '知道了'
-    })
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '申请失败，请稍后重试')
   } finally {
     applying.value = false
+  }
+}
+
+// 编辑 / 删除（仅作者）
+function toEdit() {
+  router.push(`/carpool/publish/${carpoolId}`)
+}
+
+async function removeCarpool() {
+  try {
+    await ElMessageBox.confirm(`确定删除「${carpool.value.title}」吗？删除后不可恢复。`, '删除拼车', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await carpoolApi.deleteCarpool(carpoolId)
+    ElMessage.success('删除成功')
+    router.replace('/carpool')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '删除失败')
   }
 }
 
@@ -164,18 +183,22 @@ onMounted(loadDetail)
         >
           {{ carpool.seats_left > 0 ? '🙋 申请加入' : '已满员' }}
         </el-button>
+        <template v-if="carpool.is_author">
+          <el-button size="large" @click="toEdit">✏️ 编辑</el-button>
+          <el-button type="danger" size="large" plain @click="removeCarpool">🗑️ 删除</el-button>
+        </template>
         <el-button size="large" @click="router.back()">← 返回列表</el-button>
       </div>
     </el-card>
 
-    <!-- 申请弹窗（全局整合） -->
+    <!-- 申请弹窗 -->
     <el-dialog v-model="applyVisible" title="申请加入拼车" width="480px" :close-on-click-modal="false">
       <el-form label-width="90px">
         <el-form-item label="姓名" required>
           <el-input v-model="applyForm.name" placeholder="请输入您的姓名" />
         </el-form-item>
         <el-form-item label="联系电话" required>
-          <el-input v-model="applyForm.phone" placeholder="请输入手机号码" />
+          <el-input v-model="applyForm.phone" maxlength="11" placeholder="请输入 11 位手机号码" />
         </el-form-item>
         <el-form-item label="人数">
           <el-input-number v-model="applyForm.people_count" :min="1" :max="carpool.seats_left" />
@@ -334,6 +357,7 @@ onMounted(loadDetail)
   display: flex;
   gap: 12px;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .hint {
