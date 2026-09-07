@@ -398,6 +398,7 @@ def content_stats(session: Session = Depends(get_session)):
 def list_hot_contents(
     limit: int = Query(default=10, ge=1, le=50, description="返回条数，默认10，最多50"),
     days: int = Query(default=7, ge=1, le=90, description="时间窗口（天），默认近7天，最多90天"),
+    type: Optional[str] = Query(default=None, description="按 type 筛选，不传为全部"),
     session: Session = Depends(get_session),
 ):
     """近 N 天内浏览量最高的内容，供首页热门卡片展示。
@@ -405,14 +406,21 @@ def list_hot_contents(
     排序：view_count 降序 → created_at 降序 → id 降序（保证稳定排序）。
     注意：本路由必须声明在 /contents/{content_id} 之前，否则 "hot" 会被当成 id 解析。
     """
+    _validate_optional_type(type)
     since = datetime.now() - timedelta(days=days)
+    where = [Content.created_at >= since]
+    if type:
+        where.append(Content.type == type)
     stmt = (
         select(Content)
-        .where(Content.created_at >= since)
+        .where(*where)
         .order_by(Content.view_count.desc(), Content.created_at.desc(), Content.id.desc())
         .limit(limit)
     )
     items = session.exec(stmt).all()
+    # 空列表短路：避免对空 id 集合做两次无意义的批量查询
+    if not items:
+        return ok({"items": []})
     name_map = users_nickname_map(session, [c.author_id for c in items])
     count_map = comments_count_map(session, [c.id for c in items])
     return ok({
