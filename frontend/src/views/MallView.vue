@@ -20,6 +20,7 @@ const total = ref(0)
 const page = ref(1)
 const size = ref(12)
 const loading = ref(false)
+let requestId = 0
 
 const userPoints = computed(() => store.signStatus?.totalPoints || 0)
 
@@ -32,6 +33,7 @@ const tagColorMap = {
 }
 
 async function load() {
+  const currentRequestId = ++requestId
   loading.value = true
   try {
     const data = await mallApi.listGoods({
@@ -40,9 +42,11 @@ async function load() {
       page: page.value,
       size: size.value
     })
+    if (currentRequestId !== requestId) return
     list.value = data.items || data || []
-    total.value = data.total || list.value.length
+    total.value = data.total ?? list.value.length
   } catch {
+    if (currentRequestId !== requestId) return
     let mock = getMockGoods()
     if (activeCategory.value !== '全部') mock = mock.filter((g) => g.category === activeCategory.value)
     if (keyword.value) mock = mock.filter((g) => g.name.includes(keyword.value))
