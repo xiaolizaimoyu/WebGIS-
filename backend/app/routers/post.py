@@ -93,10 +93,14 @@ def _get_optional_user(request: Request, session: Session) -> Optional[User]:
 
 # ---------- 序列化辅助 ----------
 def content_to_dict(content: Content, author_name: str, comment_count: int = 0, is_author: Optional[bool] = None) -> dict:
+    # 摘要：正文前 100 字，列表卡片展示用，正文原样保留在 body 字段
+    body = content.body or ""
+    summary = body[:100] + ("..." if len(body) > 100 else "")
     d = {
         "id": content.id,
         "title": content.title,
-        "body": content.body,
+        "body": body,
+        "summary": summary,
         "type": content.type,
         "category": content.category,
         "images": content.images or [],
