@@ -376,6 +376,7 @@ onMounted(load)
   color: #909399;
   margin-top: 8px;
   text-align: center;
+  line-height: 1.5;
 }
 
 /* 响应式：小屏幕下右侧面板变为全宽 */
@@ -399,6 +400,9 @@ onMounted(load)
   .thumb {
     width: 96px;
     height: 72px;
+  }
+  .map-empty {
+    height: 280px;
   }
 }
 </style>
