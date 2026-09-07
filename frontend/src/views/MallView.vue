@@ -347,6 +347,10 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.filter-row :deep(.el-input) {
+  max-width: 100%;
+}
+
 .reset-btn {
   margin-left: auto;
 }
@@ -554,6 +558,9 @@ onMounted(() => {
   }
   .banner-decoration {
     display: none;
+  }
+  .filter-row :deep(.el-input) {
+    width: 100% !important;
   }
 }
 </style>
