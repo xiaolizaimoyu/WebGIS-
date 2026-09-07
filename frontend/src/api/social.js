@@ -12,3 +12,6 @@ export const toggleFavorite = (contentId) => request.post(`/social/favorites/${c
 
 // 检查当前用户是否已收藏 -> { favorited }
 export const checkFavorite = (contentId) => request.get(`/social/favorites/check/${contentId}`)
+
+// 我的收藏列表（需登录）：{ page, size } -> { total, items: [{ id, content_id, created_at }] }
+export const myFavorites = (params) => request.get('/social/favorites/mine', { params })

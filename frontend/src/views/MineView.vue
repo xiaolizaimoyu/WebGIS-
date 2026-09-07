@@ -1,15 +1,18 @@
 <script setup>
 // 我的发布管理页（归属：前端 B）
-// 登录用户管理自己发布的内容：查看 / 编辑 / 删除
-// TODO(前端B)：批量管理、草稿箱、数据统计展示等扩展点
+// 两个 Tab：我的发布（查看 / 编辑 / 删除）+ 我的收藏（对接后端 F 的 /api/social）
+// TODO(前端B)：批量管理、数据统计展示等扩展点
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as postApi from '@/api/post'
+import * as socialApi from '@/api/social'
 import { formatTime, TYPE_MAP } from '@/api/const'
 
 const router = useRouter()
+const activeTab = ref('posts')
 
+// ===== 我的发布 =====
 const list = ref([])
 const total = ref(0)
 const page = ref(1)
@@ -25,6 +28,60 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+// ===== 我的收藏 =====
+// 接口只返回 content_id，需逐条取详情组装（N+1，待后端提供批量/联表接口后优化）
+const favList = ref([])
+const favTotal = ref(0)
+const favPage = ref(1)
+const favLoading = ref(false)
+
+async function loadFavorites() {
+  favLoading.value = true
+  try {
+    const data = await socialApi.myFavorites({ page: favPage.value, size: size.value })
+    favTotal.value = data.total
+    const items = await Promise.all(
+      (data.items || []).map(async (f) => {
+        try {
+          // 内容可能已被作者删除：取详情失败则跳过该条
+          const content = await postApi.getContent(f.content_id)
+          return { content, favTime: f.created_at }
+        } catch {
+          return null
+        }
+      })
+    )
+    favList.value = items.filter(Boolean)
+  } finally {
+    favLoading.value = false
+  }
+}
+
+// 切换 Tab 时按需加载（每类数据只拉一次，翻页再更新）
+function onTabChange(tab) {
+  if (tab === 'favorites' && !favList.value.length && !favLoading.value) loadFavorites()
+}
+
+async function unfav(item) {
+  try {
+    await ElMessageBox.confirm(`确定取消收藏《${item.content.title}》吗？`, '取消收藏', {
+      type: 'warning',
+      confirmButtonText: '取消收藏',
+      cancelButtonText: '再想想'
+    })
+  } catch {
+    return
+  }
+  await socialApi.toggleFavorite(item.content.id)
+  ElMessage.success('已取消收藏')
+  await loadFavorites()
+}
+
+function onFavPageChange(p) {
+  favPage.value = p
+  loadFavorites()
 }
 
 function firstImage(item) {
@@ -59,49 +116,96 @@ onMounted(load)
 
 <template>
   <div class="page-container">
-    <div class="head">
-      <h2>我的发布</h2>
-      <span class="count">共 {{ total }} 条</span>
-      <el-button type="primary" size="small" @click="router.push('/publish')">＋ 再发一条</el-button>
-    </div>
-
-    <div v-loading="loading" class="feed">
-      <el-card v-for="c in list" :key="c.id" class="item-card" shadow="hover">
-        <div class="item-body" @click="toDetail(c.id)">
-          <div class="badge">
-            <el-tag :type="TYPE_MAP[c.type]?.tagType || 'info'" size="small">
-              {{ TYPE_MAP[c.type]?.label || c.type }}
-            </el-tag>
-            <span v-if="c.category" class="category">· {{ c.category }}</span>
-          </div>
-          <h3 class="title">{{ c.title }}</h3>
-          <p class="summary">{{ c.body }}</p>
-          <div class="meta">发布于 {{ formatTime(c.created_at) }}</div>
+    <el-tabs v-model="activeTab" class="mine-tabs" @tab-change="onTabChange">
+      <!-- ===== 我的发布 ===== -->
+      <el-tab-pane label="我的发布" name="posts">
+        <div class="head">
+          <span class="count">共 {{ total }} 条</span>
+          <el-button type="primary" size="small" @click="router.push('/publish')">＋ 再发一条</el-button>
         </div>
 
-        <el-image v-if="firstImage(c)" :src="firstImage(c)" fit="cover" class="thumb" />
+        <div v-loading="loading" class="feed">
+          <el-card v-for="c in list" :key="c.id" class="item-card" shadow="hover">
+            <div class="item-body" @click="toDetail(c.id)">
+              <div class="badge">
+                <el-tag :type="TYPE_MAP[c.type]?.tagType || 'info'" size="small">
+                  {{ TYPE_MAP[c.type]?.label || c.type }}
+                </el-tag>
+                <span v-if="c.category" class="category">· {{ c.category }}</span>
+              </div>
+              <h3 class="title">{{ c.title }}</h3>
+              <p class="summary">{{ c.body }}</p>
+              <div class="meta">发布于 {{ formatTime(c.created_at) }}</div>
+            </div>
 
-        <div class="actions">
-          <el-button size="small" type="primary" plain @click="toEdit(c.id)">编辑</el-button>
-          <el-button size="small" type="danger" plain @click="removeItem(c.id, c.title)">删除</el-button>
+            <el-image v-if="firstImage(c)" :src="firstImage(c)" fit="cover" class="thumb" />
+
+            <div class="actions">
+              <el-button size="small" type="primary" plain @click="toEdit(c.id)">编辑</el-button>
+              <el-button size="small" type="danger" plain @click="removeItem(c.id, c.title)">删除</el-button>
+            </div>
+          </el-card>
+
+          <el-empty v-if="!loading && !list.length" description="你还没有发布过内容">
+            <el-button type="primary" @click="router.push('/publish')">去发布第一条</el-button>
+          </el-empty>
         </div>
-      </el-card>
 
-      <el-empty v-if="!loading && !list.length" description="你还没有发布过内容">
-        <el-button type="primary" @click="router.push('/publish')">去发布第一条</el-button>
-      </el-empty>
-    </div>
+        <div v-if="total > size" class="pager">
+          <el-pagination
+            background
+            layout="prev, pager, next"
+            :total="total"
+            :page-size="size"
+            :current-page="page"
+            @current-change="(p) => ((page = p), load())"
+          />
+        </div>
+      </el-tab-pane>
 
-    <div v-if="total > size" class="pager">
-      <el-pagination
-        background
-        layout="prev, pager, next"
-        :total="total"
-        :page-size="size"
-        :current-page="page"
-        @current-change="(p) => ((page = p), load())"
-      />
-    </div>
+      <!-- ===== 我的收藏 ===== -->
+      <el-tab-pane label="我的收藏" name="favorites">
+        <div class="head">
+          <span class="count">共收藏 {{ favTotal }} 条</span>
+        </div>
+
+        <div v-loading="favLoading" class="feed">
+          <el-card v-for="item in favList" :key="item.content.id" class="item-card" shadow="hover">
+            <div class="item-body" @click="toDetail(item.content.id)">
+              <div class="badge">
+                <el-tag :type="TYPE_MAP[item.content.type]?.tagType || 'info'" size="small">
+                  {{ TYPE_MAP[item.content.type]?.label || item.content.type }}
+                </el-tag>
+              </div>
+              <h3 class="title">{{ item.content.title }}</h3>
+              <p class="summary">{{ item.content.body }}</p>
+              <div class="meta">收藏于 {{ formatTime(item.favTime) }}</div>
+            </div>
+
+            <el-image v-if="firstImage(item.content)" :src="firstImage(item.content)" fit="cover" class="thumb" />
+
+            <div class="actions">
+              <el-button size="small" type="warning" plain @click="unfav(item)">取消收藏</el-button>
+            </div>
+          </el-card>
+
+          <el-empty v-if="!favLoading && !favList.length" description="还没有收藏内容，去详情页点亮 ⭐ 收藏吧">
+            <el-button type="primary" @click="router.push('/')">去首页逛逛</el-button>
+          </el-empty>
+        </div>
+
+        <div v-if="favTotal > size" class="pager">
+          <el-pagination
+            background
+            layout="prev, pager, next"
+            :total="favTotal"
+            :page-size="size"
+            :current-page="favPage"
+            @current-change="onFavPageChange"
+          />
+        </div>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
