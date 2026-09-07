@@ -51,13 +51,13 @@ _answers = {
 }
 
 _materials = [
-    {"id": 1, "title": "高等数学(下)期末复习笔记", "subject": "高数", "author_name": "学霸君", "download_count": 156, "file_type": "pdf", "size": "2.3MB",
+    {"id": 1, "title": "高等数学(下)期末复习笔记", "subject": "高数", "author_name": "学霸君", "download_count": 156, "likes": 128, "file_type": "pdf", "size": "2.3MB",
      "created_at": (datetime.now() - timedelta(days=1)).isoformat()},
-    {"id": 2, "title": "GIS空间分析实验报告模板", "subject": "GIS", "author_name": "课代表", "download_count": 89, "file_type": "docx", "size": "1.1MB",
+    {"id": 2, "title": "GIS空间分析实验报告模板", "subject": "GIS", "author_name": "课代表", "download_count": 89, "likes": 64, "file_type": "docx", "size": "1.1MB",
      "created_at": (datetime.now() - timedelta(days=2)).isoformat()},
-    {"id": 3, "title": "大学英语四级真题及答案", "subject": "英语", "author_name": "英语角", "download_count": 234, "file_type": "pdf", "size": "5.6MB",
+    {"id": 3, "title": "大学英语四级真题及答案", "subject": "英语", "author_name": "英语角", "download_count": 234, "likes": 203, "file_type": "pdf", "size": "5.6MB",
      "created_at": (datetime.now() - timedelta(days=3)).isoformat()},
-    {"id": 4, "title": "数据结构期末重点整理", "subject": "计算机", "author_name": "码农", "download_count": 178, "file_type": "pdf", "size": "3.2MB",
+    {"id": 4, "title": "数据结构期末重点整理", "subject": "计算机", "author_name": "码农", "download_count": 178, "likes": 87, "file_type": "pdf", "size": "3.2MB",
      "created_at": (datetime.now() - timedelta(days=5)).isoformat()},
 ]
 
@@ -167,6 +167,16 @@ def download_material(mid: int):
     disposition = 'attachment; filename="{}*; filename*=UTF-8\'\'{}"'.format(filename_quoted, filename_quoted)
     return Response(content=data, media_type=media_type,
                     headers={"Content-Disposition": disposition})
+
+
+@router.post("/materials/{mid}/like", summary="点赞资料（需登录）")
+def like_material(mid: int, user: User = Depends(get_current_user)):
+    """点赞数 +1，返回最新点赞数，前端据此展示，避免 NaN"""
+    m = next((m for m in _materials if m["id"] == mid), None)
+    if not m:
+        raise BizError(404, "资料不存在")
+    m["likes"] = m.get("likes", 0) + 1
+    return ok({"likes": m["likes"]}, "点赞成功")
 
 
 # ==================== 组队拼车 ====================

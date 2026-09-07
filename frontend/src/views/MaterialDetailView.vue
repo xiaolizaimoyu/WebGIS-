@@ -76,12 +76,13 @@ async function handleLike() {
   }
   liking.value = true
   try {
-    await materialApi.likeMaterial(materialId)
-    material.value.likes++
+    const data = await materialApi.likeMaterial(materialId)
+    // 后端返回最新点赞数；未返回时兜底 +1，杜绝 NaN
+    material.value.likes = data?.likes ?? (material.value.likes || 0) + 1
     ElMessage.success('点赞成功')
   } catch {
-    material.value.likes++
-    ElMessage.success('点赞成功')
+    material.value.likes = (material.value.likes || 0) + 1
+    ElMessage.success('点赞成功（网络异常，已本地+1）')
   } finally {
     liking.value = false
   }
@@ -123,7 +124,7 @@ onMounted(loadDetail)
           <span class="stat-label">下载量</span>
         </div>
         <div class="stat-item">
-          <span class="stat-num">{{ material.likes }}</span>
+          <span class="stat-num">{{ material.likes || 0 }}</span>
           <span class="stat-label">点赞数</span>
         </div>
         <div class="stat-item">
@@ -137,7 +138,7 @@ onMounted(loadDetail)
           ⬇️ 下载资料
         </el-button>
         <el-button size="large" :loading="liking" @click="handleLike">
-          ❤️ 点赞 ({{ material.likes }})
+          ❤️ 点赞 ({{ material.likes || 0 }})
         </el-button>
         <el-button size="large" @click="router.back()">
           ← 返回
