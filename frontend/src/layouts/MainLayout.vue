@@ -107,7 +107,7 @@ onMounted(() => {
         <router-link to="/" class="brand">🎓 校园活动交流平台</router-link>
 
         <!-- 导航菜单 -->
-        <nav class="nav-menu">
+        <nav class="nav-menu" aria-label="主导航">
           <router-link
             v-for="m in navMenus"
             :key="m.path"
@@ -121,7 +121,7 @@ onMounted(() => {
           </router-link>
         </nav>
 
-        <div class="spacer" aria-hidden="true" />
+        <div class="spacer" aria-hidden="true" role="presentation" />
 
         <!-- 签到按钮 -->
         <div v-if="isLoggedIn" class="sign-section" @click="handleSign">
