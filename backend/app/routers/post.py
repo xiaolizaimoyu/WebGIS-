@@ -6,6 +6,7 @@
 - 评论     /api/contents/{id}/comments
 内容的发布类操作需要登录（Depends(get_current_user)），浏览类不需要。
 """
+import html
 import uuid
 from pathlib import Path
 from typing import List, Optional
@@ -70,15 +71,15 @@ def _validate_optional_type(content_type: Optional[str]) -> None:
 
 
 def _clean_text(value: str, field_name: str) -> str:
-    """去首尾空白并拒绝纯空白输入（标题 / 正文 / 评论共用）。"""
+    """去首尾空白、拒绝纯空白、转义 HTML 特殊字符（防存储型 XSS）。标题 / 正文 / 评论共用。"""
     value = value.strip()
     if not value:
         raise BizError(400, f"{field_name}不能为空白")
-    return value
+    return html.escape(value)
 
 
-def _get_optional_user(request: Request, session: Session) -> Optional[User]:
-    """从 Authorization 头尝试解析用户，未登录或 token 无效返回 None（不报错）。
+def _get_optional_user(request: Request, session: Session = Depends(get_session)) -> Optional[User]:
+    """FastAPI 依赖注入：从 Authorization 头尝试解析用户，未登录或 token 无效返回 None（不报错）。
 
     与 get_current_user 的区别：这里是"可选鉴权"——详情接口未登录也能看，
     登录后额外返回 is_author。token 解析失败一律静默返回 None，绝不抛 500。
@@ -95,10 +96,14 @@ def _get_optional_user(request: Request, session: Session) -> Optional[User]:
 
 # ---------- 序列化辅助 ----------
 def content_to_dict(content: Content, author_name: str, comment_count: int = 0, is_author: Optional[bool] = None) -> dict:
+    # 摘要：正文前 100 字，列表卡片展示用，正文原样保留在 body 字段
+    body = content.body or ""
+    summary = body[:100] + ("..." if len(body) > 100 else "")
     d = {
         "id": content.id,
         "title": content.title,
-        "body": content.body,
+        "body": body,
+        "summary": summary,
         "type": content.type,
         "category": content.category,
         "images": content.images or [],
@@ -170,7 +175,7 @@ async def upload_image(
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     filename = f"{uuid.uuid4().hex}{ext}"
     (UPLOAD_DIR / filename).write_bytes(data)
-    return ok({"url": f"/uploads/{filename}"})
+    return ok({"url": f"/uploads/{filename}", "size": len(data)})
 
 
 # ---------- 内容 ----------
@@ -208,6 +213,8 @@ def list_contents(
     size: int = Query(default=10, ge=1, le=100),
     has_location: bool = Query(default=False, description="WebGIS：仅返回绑定了经纬度的内容（地图点位用）"),
     author_id: Optional[int] = Query(default=None, description="按作者 id 筛选，不传为全部"),
+    category: Optional[str] = Query(default=None, max_length=20, description="按二级子分类筛选，如 食堂推荐"),
+    min_view_count: Optional[int] = Query(default=None, ge=0, description="按浏览量下限筛选，只返回热度不低于该值的内容"),
     session: Session = Depends(get_session),
 ):
     _validate_optional_type(type)
@@ -217,12 +224,15 @@ def list_contents(
     filters = [Content.type == type] if type else []
     if author_id is not None:
         filters.append(Content.author_id == author_id)
+    if category:
+        filters.append(Content.category == category)
+    if min_view_count is not None:
+        filters.append(Content.view_count >= min_view_count)
     keyword = (keyword or "").strip()
     if keyword:
         filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
     if has_location:
-        # 地图只渲染拾取过地理位置的帖子
-        filters.append(Content.longitude.is_not(None))
+        # 地图只渲染拾取过地理位置的帖子，经纬度必然成对（创建时已校验），用一个条件即可
         filters.append(Content.latitude.is_not(None))
     total = session.exec(select(func.count(Content.id)).where(*filters)).one()
     if sort == "hot":
@@ -307,7 +317,7 @@ def list_my_contents(
 
 @router.get("/contents/stats", summary="内容统计（按分类汇总）")
 def content_stats(session: Session = Depends(get_session)):
-    """返回各分类的内容数量，供首页仪表盘 / 分类导航使用。"""
+    """返回各分类的内容数量与全站评论总数，供首页仪表盘 / 分类导航使用。"""
     rows = session.exec(
         select(Content.type, func.count(Content.id)).group_by(Content.type)
     ).all()
@@ -316,7 +326,8 @@ def content_stats(session: Session = Depends(get_session)):
     for t, c in rows:
         by_type[t] = c
         total += c
-    return ok({"total": total, "by_type": by_type})
+    comment_total = session.exec(select(func.count(Comment.id))).one()
+    return ok({"total": total, "comment_total": comment_total, "by_type": by_type})
 
 
 @router.put("/contents/{content_id}", summary="编辑自己发布的内容（需登录）")
@@ -357,6 +368,15 @@ def delete_content(
         raise BizError(2001, "内容不存在或已被删除")
     if content.author_id != user.id:
         raise BizError(2003, "只能删除自己发布的内容")
+    # 清理该内容上传的图片文件，避免磁盘残留
+    for img_url in (content.images or []):
+        if img_url.startswith("/uploads/"):
+            img_path = UPLOAD_DIR / Path(img_url).name
+            if img_path.exists():
+                try:
+                    img_path.unlink()
+                except OSError:
+                    pass  # 文件清理失败不阻塞删除流程
     # 批量删除该内容下的所有评论，避免逐条 ORM delete 的 N+1 问题
     session.execute(
         text("DELETE FROM comments WHERE content_id = :cid"),
@@ -368,7 +388,11 @@ def delete_content(
 
 
 @router.get("/contents/{content_id}", summary="内容详情")
-def get_content(content_id: int, request: Request, session: Session = Depends(get_session)):
+def get_content(
+    content_id: int,
+    session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(_get_optional_user),
+):
     content = session.get(Content, content_id)
     if content is None:
         raise BizError(2001, "内容不存在或已被删除")
@@ -384,7 +408,6 @@ def get_content(content_id: int, request: Request, session: Session = Depends(ge
         select(func.count(Comment.id)).where(Comment.content_id == content.id)
     ).one()
     # 可选鉴权：已登录时返回 is_author，前端据此显示编辑/删除按钮
-    current_user = _get_optional_user(request, session)
     is_author = content.author_id == current_user.id if current_user is not None else None
     return ok(content_to_dict(content, author.nickname if author else "未知用户", comment_count, is_author))
 
@@ -393,26 +416,30 @@ def get_content(content_id: int, request: Request, session: Session = Depends(ge
 @router.get("/contents/{content_id}/comments", summary="评论列表（分页）")
 def list_comments(
     content_id: int,
-    request: Request,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
+    order: str = Query(default="asc", description="asc(默认,时间正序) | desc(时间倒序,最新在前)"),
     session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(_get_optional_user),
 ):
+    if order not in ("asc", "desc"):
+        raise BizError(400, "排序参数 order 仅支持：asc | desc")
     if session.get(Content, content_id) is None:
         raise BizError(2001, "内容不存在或已被删除")
     total = session.exec(
         select(func.count(Comment.id)).where(Comment.content_id == content_id)
     ).one()
+    order_clause = Comment.created_at.desc() if order == "desc" else Comment.created_at.asc()
+    id_clause = Comment.id.desc() if order == "desc" else Comment.id.asc()
     rows = session.exec(
         select(Comment)
         .where(Comment.content_id == content_id)
-        .order_by(Comment.created_at.asc(), Comment.id.asc())
+        .order_by(order_clause, id_clause)
         .offset((page - 1) * size)
         .limit(size)
     ).all()
     name_map = users_nickname_map(session, [c.author_id for c in rows])
     # 可选鉴权：已登录时每条评论附带 is_author，前端据此显示删除按钮
-    current_user = _get_optional_user(request, session)
     current_uid = current_user.id if current_user is not None else None
     return ok({
         "total": total,
