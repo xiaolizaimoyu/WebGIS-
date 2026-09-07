@@ -266,64 +266,172 @@ export function getMockMyApplications() {
 export function getMockGoods() {
   return [
     {
-      id: 1, name: '校园定制笔记本', description: '校园专属定制笔记本，A5尺寸，100页，封面印有校徽。适合上课记笔记、写日记。',
-      category: '文具', points: 100, stock: 50, sold: 128, image: '📓',
-      tags: ['热门', '新品']
+      id: 1,
+      name: '校园定制笔记本',
+      description: '校园专属定制精装笔记本，采用优质道林纸，书写顺滑不洇墨。封面烫金校徽，质感十足，是上课记笔记、写日记、做手账的绝佳选择。',
+      category: '文具',
+      points: 100,
+      stock: 50,
+      sold: 128,
+      image: '📓',
+      imageBg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      tags: ['热门', '新品'],
+      features: ['优质道林纸100页', '封面烫金校徽', 'A5便携尺寸', '附赠书签带'],
+      specs: '尺寸：A5 (148×210mm) | 页数：100张 | 封面：PU皮烫金'
     },
     {
-      id: 2, name: '定制马克杯', description: '校园定制陶瓷马克杯，350ml，可微波炉加热，附赠精美包装盒。',
-      category: '生活用品', points: 200, stock: 30, sold: 86, image: '☕',
-      tags: ['热门']
+      id: 2,
+      name: '定制陶瓷马克杯',
+      description: '校园定制陶瓷马克杯，采用景德镇优质高岭土烧制，杯身浮雕校徽，手感温润。350ml大容量，可微波炉加热、洗碗机清洗，附赠精美礼盒包装。',
+      category: '生活用品',
+      points: 200,
+      stock: 30,
+      sold: 86,
+      image: '☕',
+      imageBg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+      tags: ['热门'],
+      features: ['景德镇高岭土烧制', '杯身浮雕校徽', '可微波可洗碗机', '精美礼盒包装'],
+      specs: '容量：350ml | 材质：优质陶瓷 | 耐高温：120°C'
     },
     {
-      id: 3, name: '高数期末押题卷', description: '高等数学期末押题卷（含详细答案解析），由学霸团队整理，命中率高。',
-      category: '学习资料', points: 50, stock: 999, sold: 342, image: '📝',
-      tags: ['限时特惠']
+      id: 3,
+      name: '高数期末押题卷',
+      description: '高等数学（上下册）期末押题卷，由历年满分学霸团队联合整理，涵盖所有高频考点和必考题型。每套试卷均附详细答案解析和解题思路，命中率高达85%！',
+      category: '学习资料',
+      points: 50,
+      stock: 999,
+      sold: 342,
+      image: '📝',
+      imageBg: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+      tags: ['限时特惠'],
+      features: ['满分学霸团队整理', '命中率高达85%', '详细答案解析', '上下册全覆盖'],
+      specs: '格式：PDF高清电子版 | 套数：6套模拟+2套真题 | 附详细解析'
     },
     {
-      id: 4, name: '校园帆布袋', description: '环保帆布购物袋，大容量，印有校园风景图案，结实耐用。',
-      category: '生活用品', points: 150, stock: 40, sold: 67, image: '👜',
-      tags: []
+      id: 4,
+      name: '校园风景帆布袋',
+      description: '环保帆布购物袋，采用16安加厚帆布，承重可达10kg。袋身印有校园标志性风景手绘图案，文艺清新。大容量设计，可装书本、电脑、购物物品，结实耐用。',
+      category: '生活用品',
+      points: 150,
+      stock: 40,
+      sold: 67,
+      image: '👜',
+      imageBg: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+      tags: [],
+      features: ['16安加厚帆布', '承重10kg', '校园风景手绘', '大容量设计'],
+      specs: '尺寸：40×35×10cm | 材质：16安帆布 | 承重：10kg'
     },
     {
-      id: 5, name: '英语四级词汇手册', description: '英语四级核心词汇手册，便携版，收录3500高频词汇，附例句和音标。',
-      category: '学习资料', points: 80, stock: 100, sold: 215, image: '📖',
-      tags: ['热门']
+      id: 5,
+      name: '英语四级词汇手册',
+      description: '英语四级核心词汇便携手册，收录3500高频词汇，按考频排序。每个单词附音标、词性、例句、同义词和记忆法。口袋大小，随身携带，利用碎片时间高效背单词。',
+      category: '学习资料',
+      points: 80,
+      stock: 100,
+      sold: 215,
+      image: '📖',
+      imageBg: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+      tags: ['热门'],
+      features: ['3500高频词汇', '按考频排序', '附例句+记忆法', '口袋便携版'],
+      specs: '页数：280页 | 尺寸：口袋版 (10×15cm) | 词汇量：3500词'
     },
     {
-      id: 6, name: '定制U盘 32G', description: '校园定制U盘，32GB大容量，USB3.0高速传输，金属外壳，刻有校徽。',
-      category: '数码', points: 500, stock: 20, sold: 45, image: '💾',
-      tags: ['限量']
+      id: 6,
+      name: '定制金属U盘 32G',
+      description: '校园定制金属U盘，32GB大容量，USB3.0高速传输，读取速度可达100MB/s。全金属外壳，激光雕刻校徽和学号，防水防震。附赠挂绳和转接头，手机电脑两用。',
+      category: '数码',
+      points: 500,
+      stock: 20,
+      sold: 45,
+      image: '💾',
+      imageBg: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+      tags: ['限量'],
+      features: ['USB3.0高速传输', '全金属防水防震', '激光雕刻校徽', '手机电脑两用'],
+      specs: '容量：32GB | 接口：USB3.0 | 读取：100MB/s | 材质：锌合金'
     },
     {
-      id: 7, name: '图书馆占座神器', description: '可折叠便携坐垫，图书馆自习必备，舒适透气，附带收纳袋。',
-      category: '生活用品', points: 120, stock: 60, sold: 98, image: '🪑',
-      tags: []
+      id: 7,
+      name: '图书馆便携坐垫',
+      description: '可折叠便携记忆棉坐垫，图书馆自习必备神器。采用慢回弹记忆棉，久坐不累。防水面料，一擦即净。折叠后仅手掌大小，附带收纳袋和挂扣，随身携带超方便。',
+      category: '生活用品',
+      points: 120,
+      stock: 60,
+      sold: 98,
+      image: '🪑',
+      imageBg: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+      tags: [],
+      features: ['慢回弹记忆棉', '久坐不累', '防水易清洁', '折叠便携'],
+      specs: '展开：35×35×3cm | 折叠：18×18×6cm | 材质：记忆棉+防水布'
     },
     {
-      id: 8, name: '考研政治思维导图', description: '考研政治全套思维导图，高清打印版，涵盖马原/毛中特/史纲/思修全部考点。',
-      category: '学习资料', points: 60, stock: 999, sold: 178, image: '🗺️',
-      tags: ['新品']
+      id: 8,
+      name: '考研政治思维导图',
+      description: '考研政治全套思维导图高清打印版，由985高校政治系学霸团队绘制。涵盖马克思主义基本原理、毛泽东思想、中国近现代史纲要、思想道德修养全部考点，逻辑清晰，一目了然。',
+      category: '学习资料',
+      points: 60,
+      stock: 999,
+      sold: 178,
+      image: '🗺️',
+      imageBg: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)',
+      tags: ['新品'],
+      features: ['985学霸团队绘制', '四大模块全覆盖', '逻辑清晰一目了然', '高清可打印'],
+      specs: '格式：PDF高清 | 页数：48页 | 覆盖：马原/毛中特/史纲/思修'
     },
     {
-      id: 9, name: '定制运动水壶', description: '校园定制运动水壶，500ml，食品级材质，防漏设计，适合运动健身。',
-      category: '生活用品', points: 180, stock: 35, sold: 52, image: '🍶',
-      tags: []
+      id: 9,
+      name: '定制运动水壶',
+      description: '校园定制运动水壶，500ml大容量，采用食品级Tritan材质，安全无异味。一键弹盖设计，运动中单手可开。防漏密封，倒置不漏水。壶身印制校园运动标语，活力满满。',
+      category: '生活用品',
+      points: 180,
+      stock: 35,
+      sold: 52,
+      image: '🍶',
+      imageBg: 'linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%)',
+      tags: [],
+      features: ['食品级Tritan材质', '500ml大容量', '一键弹盖单手开', '防漏倒置不漏水'],
+      specs: '容量：500ml | 材质：Tritan | 耐温：-10~100°C | 重量：180g'
     },
     {
-      id: 10, name: '蓝牙耳机', description: '真无线蓝牙耳机，降噪功能，续航24小时，校园定制版。',
-      category: '数码', points: 800, stock: 10, sold: 23, image: '🎧',
-      tags: ['限量', '热门']
+      id: 10,
+      name: '真无线降噪耳机',
+      description: '校园定制版真无线蓝牙耳机，主动降噪功能，隔绝环境噪音。续航长达24小时（含充电盒），支持快充10分钟用2小时。蓝牙5.3稳定连接，IPX5防水防汗，运动学习两相宜。',
+      category: '数码',
+      points: 800,
+      stock: 10,
+      sold: 23,
+      image: '🎧',
+      imageBg: 'linear-gradient(135deg, #6a11cb 0%, #2575fc 100%)',
+      tags: ['限量', '热门'],
+      features: ['主动降噪ANC', '续航24小时', '蓝牙5.3稳定', 'IPX5防水防汗'],
+      specs: '蓝牙：5.3 | 续航：6h+18h | 降噪：-35dB | 防水：IPX5'
     },
     {
-      id: 11, name: 'GIS专业实验指导书', description: '地理信息系统专业实验指导书，含ArcGIS/ENVI/QGIS操作教程，附实验数据。',
-      category: '学习资料', points: 90, stock: 80, sold: 134, image: '📚',
-      tags: ['专业必备']
+      id: 11,
+      name: 'GIS专业实验指导书',
+      description: '地理信息系统专业实验指导书，GIS专业学长倾力编写。涵盖ArcGIS、ENVI、QGIS三大主流软件操作教程，包含20个经典实验，每个实验附详细步骤截图和实验数据，零基础也能学会。',
+      category: '学习资料',
+      points: 90,
+      stock: 80,
+      sold: 134,
+      image: '📚',
+      imageBg: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)',
+      tags: ['专业必备'],
+      features: ['三大软件全覆盖', '20个经典实验', '附详细步骤截图', '附赠实验数据'],
+      specs: '格式：PDF | 页数：156页 | 软件：ArcGIS/ENVI/QGIS | 实验：20个'
     },
     {
-      id: 12, name: '定制抱枕', description: '校园定制抱枕，柔软舒适，40x40cm，可拆洗，印有校园吉祥物。',
-      category: '生活用品', points: 160, stock: 45, sold: 71, image: '🛋️',
-      tags: []
+      id: 12,
+      name: '校园吉祥物抱枕',
+      description: '校园定制吉祥物抱枕，采用超柔短毛绒面料，手感细腻亲肤。内填高弹PP棉，蓬松饱满不易变形。40×40cm黄金尺寸，靠坐抱皆宜。枕套可拆洗，经久耐用，是宿舍生活的暖心伴侣。',
+      category: '生活用品',
+      points: 160,
+      stock: 45,
+      sold: 71,
+      image: '🛋️',
+      imageBg: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+      tags: [],
+      features: ['超柔短毛绒面料', '高弹PP棉填充', '枕套可拆洗', '吉祥物定制款'],
+      specs: '尺寸：40×40cm | 面料：超柔短毛绒 | 填充：高弹PP棉 | 重量：350g'
     }
   ]
 }
