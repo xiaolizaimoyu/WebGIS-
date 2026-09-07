@@ -79,8 +79,8 @@ def _clean_text(value: str, field_name: str) -> str:
     return html.escape(value)
 
 
-def _get_optional_user(request: Request, session: Session) -> Optional[User]:
-    """从 Authorization 头尝试解析用户，未登录或 token 无效返回 None（不报错）。"""
+def _get_optional_user(request: Request, session: Session = Depends(get_session)) -> Optional[User]:
+    """FastAPI 依赖：从 Authorization 头尝试解析用户，未登录或 token 无效返回 None（不报错）。"""
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return None
@@ -382,7 +382,11 @@ def delete_content(
 
 
 @router.get("/contents/{content_id}", summary="内容详情")
-def get_content(content_id: int, request: Request, session: Session = Depends(get_session)):
+def get_content(
+    content_id: int,
+    session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(_get_optional_user),
+):
     content = session.get(Content, content_id)
     if content is None:
         raise BizError(2001, "内容不存在或已被删除")
@@ -398,7 +402,6 @@ def get_content(content_id: int, request: Request, session: Session = Depends(ge
         select(func.count(Comment.id)).where(Comment.content_id == content.id)
     ).one()
     # 可选鉴权：已登录时返回 is_author，前端据此显示编辑/删除按钮
-    current_user = _get_optional_user(request, session)
     is_author = content.author_id == current_user.id if current_user is not None else None
     return ok(content_to_dict(content, author.nickname if author else "未知用户", comment_count, is_author))
 
@@ -407,11 +410,11 @@ def get_content(content_id: int, request: Request, session: Session = Depends(ge
 @router.get("/contents/{content_id}/comments", summary="评论列表（分页）")
 def list_comments(
     content_id: int,
-    request: Request,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
     order: str = Query(default="asc", description="asc(默认,时间正序) | desc(时间倒序,最新在前)"),
     session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(_get_optional_user),
 ):
     if order not in ("asc", "desc"):
         raise BizError(400, "排序参数 order 仅支持：asc | desc")
@@ -431,7 +434,6 @@ def list_comments(
     ).all()
     name_map = users_nickname_map(session, [c.author_id for c in rows])
     # 可选鉴权：已登录时每条评论附带 is_author，前端据此显示删除按钮
-    current_user = _get_optional_user(request, session)
     current_uid = current_user.id if current_user is not None else None
     return ok({
         "total": total,
