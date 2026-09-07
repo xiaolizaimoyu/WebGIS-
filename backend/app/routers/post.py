@@ -9,7 +9,7 @@
 import html
 import uuid
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from sqlalchemy import func, or_, text
@@ -61,7 +61,7 @@ def _normalize_category(content_type: str, category: Optional[str]) -> Optional[
     return category
 
 
-def _normalize_location(longitude: Optional[float], latitude: Optional[float]) -> tuple:
+def _normalize_location(longitude: Optional[float], latitude: Optional[float]) -> Tuple[Optional[float], Optional[float]]:
     """经纬度成对校验：只传一个视为参数错误；都不传返回 (None, None)。"""
     if longitude is None and latitude is None:
         return None, None
@@ -121,7 +121,7 @@ def _build_content_filters(
     return filters
 
 
-def _validate_sort(value: str, options, field_name: str = "sort") -> str:
+def _validate_sort(value: str, options: Tuple[str, ...], field_name: str = "sort") -> str:
     """排序参数校验：非法值直接报错，合法返回原值。list/list_my/comments 三处共用。"""
     if value not in options:
         raise BizError(400, f"排序参数 {field_name} 仅支持：{' | '.join(options)}")
@@ -220,7 +220,7 @@ def _query_contents_page(
     sort: str,
     page: int,
     size: int,
-) -> tuple:
+) -> Tuple[list, dict, int]:
     """内容分页查询公共逻辑：返回 (items, count_map, total)。
 
     - sort=hot：子查询带回评论数，一次拿到排序依据和展示数据；
