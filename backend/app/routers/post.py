@@ -393,17 +393,22 @@ def list_comments(
     request: Request,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
+    order: str = Query(default="asc", description="asc(默认,时间正序) | desc(时间倒序,最新在前)"),
     session: Session = Depends(get_session),
 ):
+    if order not in ("asc", "desc"):
+        raise BizError(400, "排序参数 order 仅支持：asc | desc")
     if session.get(Content, content_id) is None:
         raise BizError(2001, "内容不存在或已被删除")
     total = session.exec(
         select(func.count(Comment.id)).where(Comment.content_id == content_id)
     ).one()
+    order_clause = Comment.created_at.desc() if order == "desc" else Comment.created_at.asc()
+    id_clause = Comment.id.desc() if order == "desc" else Comment.id.asc()
     rows = session.exec(
         select(Comment)
         .where(Comment.content_id == content_id)
-        .order_by(Comment.created_at.asc(), Comment.id.asc())
+        .order_by(order_clause, id_clause)
         .offset((page - 1) * size)
         .limit(size)
     ).all()
