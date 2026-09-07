@@ -69,6 +69,10 @@ async function handleSign() {
   const result = await store.doSign()
   if (result) {
     ElMessage.success(`签到成功！获得 ${result.points} 积分，连续签到 ${result.continuousDays} 天`)
+  } else {
+    // doSign 返回 null：今日已签到（后端 points=0），刷新状态并提示
+    ElMessage.info('今日已签到，明天再来吧')
+    store.fetchSignStatus()
   }
 }
 
