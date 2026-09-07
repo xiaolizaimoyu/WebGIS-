@@ -33,6 +33,7 @@ class ContentIn(BaseModel):
     # WebGIS 新增：地图选点经纬度，可不传；传则必须经/纬成对且范围合法
     longitude: Optional[float] = Field(default=None, ge=-180, le=180, description="经度")
     latitude: Optional[float] = Field(default=None, ge=-90, le=90, description="纬度")
+    location_name: Optional[str] = Field(default=None, max_length=50, description="地点名称（如 第二食堂），不传为空")
 
 
 class CommentIn(BaseModel):

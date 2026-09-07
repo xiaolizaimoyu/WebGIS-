@@ -178,6 +178,7 @@ def content_to_dict(content: Content, author_name: str, comment_count: int = 0, 
         # WebGIS：帖子绑定的地理位置，供前端地图渲染点位
         "longitude": content.longitude,
         "latitude": content.latitude,
+        "location_name": content.location_name,
         "author_id": content.author_id,
         "author_name": author_name,
         "comment_count": comment_count,
@@ -314,6 +315,7 @@ def create_content(
         images=data.images,
         longitude=longitude,
         latitude=latitude,
+        location_name=(data.location_name or "").strip() or None if longitude is not None else None,
         author_id=user.id,
     )
     session.add(content)
@@ -455,6 +457,7 @@ def update_content(
     content.images = data.images
     content.longitude = longitude
     content.latitude = latitude
+    content.location_name = (data.location_name or "").strip() or None if longitude is not None else None
     session.add(content)
     session.commit()
     session.refresh(content)

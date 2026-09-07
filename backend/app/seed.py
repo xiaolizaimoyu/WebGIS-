@@ -45,6 +45,38 @@ USERS = [
 # 校园中心坐标——演示数据围绕它生成点位（山东理工大学西校区，淄博·新村西路266号）。
 MAP_CENTER = (118.001917, 36.814013)
 
+# 校园地点库（与前端 frontend/src/api/const.js CAMPUS_PLACES 保持一致）
+# (名称, 经度, 纬度)
+CAMPUS_PLACES = [
+    ("北门（新村西路）", 118.0008, 36.8162),
+    ("图书馆", 118.0005, 36.8148),
+    ("鸿远楼（行政楼）", 118.0016, 36.8139),
+    ("一号教学楼", 118.0030, 36.8156),
+    ("二号教学楼", 118.0019, 36.8154),
+    ("三号教学楼", 117.9999, 36.8132),
+    ("逸夫楼", 118.0004, 36.8123),
+    ("第一食堂（一餐）", 118.0041, 36.8153),
+    ("第二食堂（二餐）", 118.0036, 36.8127),
+    ("第三食堂（三餐）", 117.9996, 36.8151),
+    ("体育馆", 118.0052, 36.8132),
+    ("田径场", 118.0044, 36.8141),
+    ("学生公寓区", 118.0022, 36.8166),
+    ("大学生事务中心", 118.0009, 36.8138),
+    ("校医院", 117.9991, 36.8143),
+    ("东门", 118.0068, 36.8140),
+    ("南门", 118.0019, 36.8122),
+]
+
+
+def _nearest_place(lng: float, lat: float) -> str:
+    """按经纬度返回最近的校园地点名（平面近似即可）。"""
+    best, best_d = None, 1e9
+    for name, plng, plat in CAMPUS_PLACES:
+        d = (plng - lng) ** 2 + (plat - lat) ** 2
+        if d < best_d:
+            best, best_d = name, d
+    return best
+
 
 def _spot(index: int):
     """按帖子下标生成一个稳定（可重复、幂等）的校园内偏移点。"""
@@ -53,7 +85,21 @@ def _spot(index: int):
     return (MAP_CENTER[0] + radius * math.cos(angle), MAP_CENTER[1] + radius * math.sin(angle))
 
 
-NO_COORD = {4}
+
+# 每篇帖子绑定的真实校园地点（帖子文本提到哪就绑哪，地图点位落在对应位置）
+POSTS_LOCATION = {
+    0: "一号教学楼",   # 学生会例会（一号教学楼 201）
+    1: "逸夫楼",       # 学术讲座（逸夫楼报告厅）
+    2: "三号教学楼",   # 班级班会
+    3: "第一食堂（一餐）",  # 食堂二楼自选窗口
+    4: "图书馆",       # 图书馆延长开放
+    5: "第一食堂（一餐）",  # 一食堂门口二手集市
+    6: "第二食堂（二餐）",  # 二食堂三楼麻辣香锅
+    7: "图书馆",       # 图书馆咖啡厅
+    8: "二号教学楼",   # 二教 201 拾到校园卡
+    9: "田径场",       # 操场看台
+}
+
 
 # (title, body, type, category, images_index_list, author_index, 距现在的分钟)
 POSTS = [
@@ -243,12 +289,22 @@ def run(reset: bool = False) -> None:
         # 4) 创建演示帖子
         created = []
         for idx, (title, body, ctype, category, img_idx, author_idx, ago_min) in enumerate(POSTS):
-            loc = None if idx in NO_COORD else _spot(idx)
+            loc = None
+            place = POSTS_LOCATION.get(idx)
+            if place:
+                for pname, plng, plat in CAMPUS_PLACES:
+                    if pname == place:
+                        # 稳定微偏移，避免同地点的帖子点位完全重叠
+                        off_lng = ((idx % 3) - 1) * 0.00012
+                        off_lat = ((idx // 3) % 3 - 1) * 0.00012
+                        loc = (round(plng + off_lng, 6), round(plat + off_lat, 6))
+                        break
             content = Content(
                 title=title, body=body, type=ctype, category=category,
                 images=[img_urls[i] for i in img_idx],
                 longitude=loc[0] if loc else None,
                 latitude=loc[1] if loc else None,
+                location_name=place if loc else None,
                 like_count=idx % 4,  # 模拟点赞数
                 author_id=users[author_idx].id,
                 created_at=now - timedelta(minutes=ago_min),
