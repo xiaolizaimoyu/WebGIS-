@@ -6,6 +6,7 @@
 - 评论     /api/contents/{id}/comments
 内容的发布类操作需要登录（Depends(get_current_user)），浏览类不需要。
 """
+import html
 import uuid
 from pathlib import Path
 from typing import List, Optional
@@ -71,11 +72,11 @@ def _validate_optional_type(content_type: Optional[str]) -> None:
 
 
 def _clean_text(value: str, field_name: str) -> str:
-    """去首尾空白并拒绝纯空白输入（标题 / 正文 / 评论共用）。"""
+    """去首尾空白、拒绝纯空白、转义 HTML 特殊字符（防存储型 XSS）。标题 / 正文 / 评论共用。"""
     value = value.strip()
     if not value:
         raise BizError(400, f"{field_name}不能为空白")
-    return value
+    return html.escape(value)
 
 
 def _get_optional_user(request: Request, session: Session) -> Optional[User]:
