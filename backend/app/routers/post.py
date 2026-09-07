@@ -304,7 +304,7 @@ def list_my_contents(
 
 @router.get("/contents/stats", summary="内容统计（按分类汇总）")
 def content_stats(session: Session = Depends(get_session)):
-    """返回各分类的内容数量，供首页仪表盘 / 分类导航使用。"""
+    """返回各分类的内容数量与全站评论总数，供首页仪表盘 / 分类导航使用。"""
     rows = session.exec(
         select(Content.type, func.count(Content.id)).group_by(Content.type)
     ).all()
@@ -313,7 +313,8 @@ def content_stats(session: Session = Depends(get_session)):
     for t, c in rows:
         by_type[t] = c
         total += c
-    return ok({"total": total, "by_type": by_type})
+    comment_total = session.exec(select(func.count(Comment.id))).one()
+    return ok({"total": total, "comment_total": comment_total, "by_type": by_type})
 
 
 @router.put("/contents/{content_id}", summary="编辑自己发布的内容（需登录）")
