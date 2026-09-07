@@ -26,8 +26,10 @@ const total = ref(0)
 const page = ref(1)
 const size = ref(8)
 const loading = ref(false)
+let requestId = 0
 
 async function load() {
+  const currentRequestId = ++requestId
   loading.value = true
   try {
     const data = await postApi.listContents({
@@ -35,10 +37,12 @@ async function load() {
       page: page.value,
       size: size.value
     })
-    list.value = data.items
-    total.value = data.total
+    if (currentRequestId !== requestId) return
+    list.value = data.items || data || []
+    total.value = data.total ?? list.value.length
   } catch (e) {
     // 后端未启动时使用模拟数据，确保前端可独立运行
+    if (currentRequestId !== requestId) return
     list.value = getMockContents()
     total.value = list.value.length
   } finally {
