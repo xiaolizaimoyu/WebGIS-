@@ -65,13 +65,8 @@ def _normalize_location(longitude: Optional[float], latitude: Optional[float]) -
     return longitude, latitude
 
 
-def _ensure_valid_type(content_type: str) -> None:
-    """type 合法性校验（创建 / 编辑共用）。"""
-    _validate_optional_type(content_type)
-
-
 def _validate_optional_type(content_type: Optional[str]) -> None:
-    """type 筛选校验：None 不校验，非空则必须合法。列表接口直接用，创建/编辑经 _ensure_valid_type 复用。"""
+    """type 校验：None 不校验（列表筛选用），非空则必须合法（创建/编辑用）。"""
     if content_type is not None and content_type not in VALID_TYPES:
         raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
 
@@ -241,7 +236,7 @@ def create_content(
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ):
-    _ensure_valid_type(data.type)
+    _validate_optional_type(data.type)
     longitude, latitude = _normalize_location(data.longitude, data.latitude)
     category = _normalize_category(data.type, data.category)
     content = Content(
@@ -361,7 +356,7 @@ def update_content(
         raise BizError(2001, "内容不存在或已被删除")
     if content.author_id != user.id:
         raise BizError(2003, "只能编辑自己发布的内容")
-    _ensure_valid_type(data.type)
+    _validate_optional_type(data.type)
     longitude, latitude = _normalize_location(data.longitude, data.latitude)
     content.title = _clean_text(data.title, "标题")
     content.body = _clean_text(data.body, "正文")
