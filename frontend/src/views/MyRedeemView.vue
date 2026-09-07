@@ -101,7 +101,9 @@ onMounted(() => {
         </el-empty>
 
         <div v-for="r in filteredList" :key="r.id" class="record-item">
-          <div class="record-icon">{{ getGoodsImage(r.goods_id) }}</div>
+          <div class="record-icon">
+            <img :src="getGoodsImage(r.goods_id)" :alt="r.goods_name" class="record-cover" />
+          </div>
           <div class="record-info">
             <div class="record-head">
               <h4 class="record-name">{{ r.goods_name }}</h4>

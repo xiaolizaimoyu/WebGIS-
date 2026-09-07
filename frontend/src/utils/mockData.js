@@ -263,66 +263,81 @@ export function getMockMyApplications() {
 }
 
 // ====== 积分商城 Mock ======
+const mallImageUrls = [
+  'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1526045478516-99145907023c?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1524578271613-d550eacf6090?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=900&q=80'
+]
+
 export function getMockGoods() {
   return [
     {
       id: 1, name: '校园定制笔记本', description: '校园专属定制笔记本，A5尺寸，100页，封面印有校徽。适合上课记笔记、写日记。',
-      category: '文具', points: 100, stock: 50, sold: 128, image: '📓',
+      category: '文具', points: 100, stock: 50, sold: 128, image: mallImageUrls[0],
       tags: ['热门', '新品']
     },
     {
       id: 2, name: '定制马克杯', description: '校园定制陶瓷马克杯，350ml，可微波炉加热，附赠精美包装盒。',
-      category: '生活用品', points: 200, stock: 30, sold: 86, image: '☕',
+      category: '生活用品', points: 200, stock: 30, sold: 86, image: mallImageUrls[1],
       tags: ['热门']
     },
     {
       id: 3, name: '高数期末押题卷', description: '高等数学期末押题卷（含详细答案解析），由学霸团队整理，命中率高。',
-      category: '学习资料', points: 50, stock: 999, sold: 342, image: '📝',
+      category: '学习资料', points: 50, stock: 999, sold: 342, image: mallImageUrls[2],
       tags: ['限时特惠']
     },
     {
       id: 4, name: '校园帆布袋', description: '环保帆布购物袋，大容量，印有校园风景图案，结实耐用。',
-      category: '生活用品', points: 150, stock: 40, sold: 67, image: '👜',
+      category: '生活用品', points: 150, stock: 40, sold: 67, image: mallImageUrls[3],
       tags: []
     },
     {
       id: 5, name: '英语四级词汇手册', description: '英语四级核心词汇手册，便携版，收录3500高频词汇，附例句和音标。',
-      category: '学习资料', points: 80, stock: 100, sold: 215, image: '📖',
+      category: '学习资料', points: 80, stock: 100, sold: 215, image: mallImageUrls[4],
       tags: ['热门']
     },
     {
       id: 6, name: '定制U盘 32G', description: '校园定制U盘，32GB大容量，USB3.0高速传输，金属外壳，刻有校徽。',
-      category: '数码', points: 500, stock: 20, sold: 45, image: '💾',
+      category: '数码', points: 500, stock: 20, sold: 45, image: mallImageUrls[5],
       tags: ['限量']
     },
     {
       id: 7, name: '图书馆占座神器', description: '可折叠便携坐垫，图书馆自习必备，舒适透气，附带收纳袋。',
-      category: '生活用品', points: 120, stock: 60, sold: 98, image: '🪑',
+      category: '生活用品', points: 120, stock: 60, sold: 98, image: mallImageUrls[6],
       tags: []
     },
     {
       id: 8, name: '考研政治思维导图', description: '考研政治全套思维导图，高清打印版，涵盖马原/毛中特/史纲/思修全部考点。',
-      category: '学习资料', points: 60, stock: 999, sold: 178, image: '🗺️',
+      category: '学习资料', points: 60, stock: 999, sold: 178, image: mallImageUrls[7],
       tags: ['新品']
     },
     {
       id: 9, name: '定制运动水壶', description: '校园定制运动水壶，500ml，食品级材质，防漏设计，适合运动健身。',
-      category: '生活用品', points: 180, stock: 35, sold: 52, image: '🍶',
+      category: '生活用品', points: 180, stock: 35, sold: 52, image: mallImageUrls[8],
       tags: []
     },
     {
       id: 10, name: '蓝牙耳机', description: '真无线蓝牙耳机，降噪功能，续航24小时，校园定制版。',
-      category: '数码', points: 800, stock: 10, sold: 23, image: '🎧',
+      category: '数码', points: 800, stock: 10, sold: 23, image: mallImageUrls[9],
       tags: ['限量', '热门']
     },
     {
       id: 11, name: 'GIS专业实验指导书', description: '地理信息系统专业实验指导书，含ArcGIS/ENVI/QGIS操作教程，附实验数据。',
-      category: '学习资料', points: 90, stock: 80, sold: 134, image: '📚',
+      category: '学习资料', points: 90, stock: 80, sold: 134, image: mallImageUrls[10],
       tags: ['专业必备']
     },
     {
       id: 12, name: '定制抱枕', description: '校园定制抱枕，柔软舒适，40x40cm，可拆洗，印有校园吉祥物。',
-      category: '生活用品', points: 160, stock: 45, sold: 71, image: '🛋️',
+      category: '生活用品', points: 160, stock: 45, sold: 71, image: mallImageUrls[11],
       tags: []
     }
   ]

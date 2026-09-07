@@ -84,6 +84,13 @@ function goToMyRecords() {
 const mapCenter = ref([116.397428, 39.90923])
 const mapMarkers = computed(() => [])
 
+function resolveGoodsImage(image) {
+  if (!image) {
+    return 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80'
+  }
+  return image
+}
+
 onMounted(() => {
   loadCategories()
   load()
@@ -151,7 +158,7 @@ onMounted(() => {
           @click="toDetail(g.id)"
         >
           <div class="goods-image">
-            <span class="goods-emoji">{{ g.image }}</span>
+            <img :src="resolveGoodsImage(g.image)" :alt="g.name" class="goods-cover" />
             <div v-if="g.tags && g.tags.length" class="goods-tags">
               <el-tag
                 v-for="t in g.tags.slice(0, 2)"

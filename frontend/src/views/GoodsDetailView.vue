@@ -137,7 +137,7 @@ onMounted(() => {
         <!-- 左侧商品图 -->
         <div class="goods-image-section">
           <div class="goods-image-large">
-            <span class="image-emoji">{{ goods.image }}</span>
+            <img :src="goods.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80'" :alt="goods.name" class="goods-detail-cover" />
           </div>
           <div v-if="goods.tags && goods.tags.length" class="goods-tags-large">
             <el-tag
