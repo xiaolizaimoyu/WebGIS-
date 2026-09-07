@@ -170,6 +170,11 @@ function coordinate(value) {
   return Number.isFinite(number) ? number : null
 }
 
+// 分类图标（前端B，仅信息流视觉用；TYPE_MAP/mapColor 来自 C 维护的 const.js）
+const TYPE_ICONS = { meeting: '📅', news: '📰', food: '🍜', lost: '🔍' }
+const typeIcon = (t) => TYPE_ICONS[t] || '📌'
+const typeColor = (c) => TYPE_MAP[c.type]?.mapColor || '#409eff'
+
 // 从内容列表提取地图标记点（带坐标的内容）
 const mapMarkers = computed(() =>
   list.value
@@ -252,20 +257,21 @@ function locateOnMap(item) {
           v-for="c in list"
           :key="c.id"
           class="item-card"
+          :style="{ borderLeftColor: typeColor(c) }"
           shadow="hover"
           @click="toDetail(c.id)"
         >
           <div class="item-body">
             <div class="badge">
-              <el-tag :type="TYPE_MAP[c.type]?.tagType || 'info'" size="small">
-                {{ TYPE_MAP[c.type]?.label || c.type }}
+              <el-tag :type="TYPE_MAP[c.type]?.tagType || 'info'" size="small" effect="light" round>
+                {{ typeIcon(c.type) }} {{ TYPE_MAP[c.type]?.label || c.type }}
               </el-tag>
-              <span v-if="c.category" class="category">· {{ c.category }}</span>
+              <span v-if="c.category" class="category"># {{ c.category }}</span>
             </div>
             <h3 class="title">{{ c.title }}</h3>
             <p class="summary">{{ summaryText(c) }}</p>
             <div class="meta">
-              <span>{{ c.author_name }}</span>
+              <span class="author"><i class="avatar">{{ (c.author_name || '匿')[0] }}</i>{{ c.author_name || '匿名' }}</span>
               <span>发布于 {{ formatTime(c.created_at) }}</span>
             </div>
             <div class="item-actions" v-if="c.longitude && c.latitude">
@@ -361,11 +367,13 @@ function locateOnMap(item) {
   margin-bottom: 14px;
   border-radius: 10px;
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border-left: 3px solid #409eff; /* 分类色条，颜色由 mapColor 动态覆盖 */
 }
 
 .item-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.09);
 }
 
 .item-card :deep(.el-card__body) {
@@ -412,7 +420,33 @@ function locateOnMap(item) {
   color: #a8abb2;
   font-size: 12px;
   display: flex;
+  align-items: center;
   gap: 10px;
+}
+
+.meta .author {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.meta .avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #d9ecff;
+  color: #409eff;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.category {
+  color: #909399;
+  font-size: 12px;
 }
 
 .item-actions {
