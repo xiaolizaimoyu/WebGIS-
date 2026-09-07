@@ -6,6 +6,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as postApi from '@/api/post'
+import * as socialApi from '@/api/social'
 import { TYPE_MAP, formatTime } from '@/api/const'
 import { useUserStore } from '@/stores/user'
 
@@ -20,6 +21,53 @@ const commentText = ref('')
 const sending = ref(false)
 const loading = ref(true)
 const loadFailed = ref(false)
+
+// 点赞 / 收藏状态（前端 B 对接后端 F 的 /api/social）
+const liked = ref(false)
+const likeCount = ref(0)
+const favorited = ref(false)
+
+// 内容接口暂不返回 like_count，初始以 0 兜底，点赞后用接口返回值更新
+async function loadSocialState() {
+  if (!store.isLoggedIn) return
+  const [likeRes, favRes] = await Promise.all([
+    socialApi.checkLike(contentId).catch(() => ({ liked: false })),
+    socialApi.checkFavorite(contentId).catch(() => ({ favorited: false }))
+  ])
+  liked.value = !!likeRes?.liked
+  favorited.value = !!favRes?.favorited
+}
+
+async function onToggleLike() {
+  if (!store.isLoggedIn) {
+    ElMessage.warning('请先登录后再点赞')
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  try {
+    const data = await socialApi.toggleLike(contentId)
+    liked.value = !!data.liked
+    likeCount.value = data.like_count ?? likeCount.value
+    ElMessage.success(liked.value ? '已点赞' : '已取消点赞')
+  } catch (e) {
+    // request.js 已弹错误提示
+  }
+}
+
+async function onToggleFavorite() {
+  if (!store.isLoggedIn) {
+    ElMessage.warning('请先登录后再收藏')
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  try {
+    const data = await socialApi.toggleFavorite(contentId)
+    favorited.value = !!data.favorited
+    ElMessage.success(favorited.value ? '已收藏' : '已取消收藏')
+  } catch (e) {
+    // request.js 已弹错误提示
+  }
+}
 
 async function loadDetail() {
   try {
@@ -46,7 +94,7 @@ async function loadComments() {
 async function loadAll() {
   loading.value = true
   loadFailed.value = false
-  await Promise.all([loadDetail(), loadComments()])
+  await Promise.all([loadDetail(), loadComments(), loadSocialState()])
   loading.value = false
 }
 
@@ -119,6 +167,39 @@ onMounted(loadAll)
         </div>
 
         <h1 class="title">{{ content.title }}</h1>
+
+        <!-- 点赞 / 收藏操作栏（前端 B 对接 /api/social） -->
+        <div class="social-bar">
+          <el-button
+            :type="liked ? 'danger' : 'default'"
+            :plain="!liked"
+            round
+            size="small"
+            @click="onToggleLike"
+          >
+            {{ liked ? '❤️' : '🤍' }} 点赞 {{ likeCount > 0 ? likeCount : '' }}
+          </el-button>
+          <el-button
+            :type="favorited ? 'warning' : 'default'"
+            :plain="!favorited"
+            round
+            size="small"
+            @click="onToggleFavorite"
+          >
+            {{ favorited ? '⭐ 已收藏' : '☆ 收藏' }}
+          </el-button>
+          <el-button
+            v-if="content.longitude != null && content.latitude != null"
+            type="primary"
+            plain
+            round
+            size="small"
+            @click="toMapNav"
+          >
+            📍 地图查看 / 导航到这里
+          </el-button>
+        </div>
+
         <div class="body">{{ content.body }}</div>
 
         <div v-if="content.images && content.images.length" class="gallery">
@@ -221,6 +302,14 @@ onMounted(loadAll)
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.social-bar {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
 .gallery {
