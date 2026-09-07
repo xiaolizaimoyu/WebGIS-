@@ -73,6 +73,14 @@ def _validate_optional_type(content_type: Optional[str]) -> None:
         raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
 
 
+def _require_content(session: Session, content_id: int) -> Content:
+    """取出指定内容；不存在直接报 2001，避免每个接口重复写 if None 检查。"""
+    content = session.get(Content, content_id)
+    if content is None:
+        raise BizError(2001, "内容不存在或已被删除")
+    return content
+
+
 def _add_keyword_filter(filters: list, keyword: Optional[str]) -> None:
     """关键词搜索：去空白后匹配标题或正文，list_contents 与 list_my_contents 共用。"""
     keyword = (keyword or "").strip()
@@ -362,9 +370,7 @@ def update_content(
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ):
-    content = session.get(Content, content_id)
-    if content is None:
-        raise BizError(2001, "内容不存在或已被删除")
+    content = _require_content(session, content_id)
     if content.author_id != user.id:
         raise BizError(2003, "只能编辑自己发布的内容")
     _validate_optional_type(data.type)
@@ -388,9 +394,7 @@ def delete_content(
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ):
-    content = session.get(Content, content_id)
-    if content is None:
-        raise BizError(2001, "内容不存在或已被删除")
+    content = _require_content(session, content_id)
     if content.author_id != user.id:
         raise BizError(2003, "只能删除自己发布的内容")
     # 清理该内容上传的图片文件，避免磁盘残留
@@ -418,9 +422,7 @@ def get_content(
     session: Session = Depends(get_session),
     current_user: Optional[User] = Depends(_get_optional_user),
 ):
-    content = session.get(Content, content_id)
-    if content is None:
-        raise BizError(2001, "内容不存在或已被删除")
+    content = _require_content(session, content_id)
     # 浏览量自增（直接 SQL 更新保证原子性，避免 ORM 乐观锁冲突）。
     # commit 后对象会过期，直接在内存设置已知新值，省一次 refresh 查询。
     current_view = content.view_count or 0
@@ -449,8 +451,7 @@ def list_comments(
     session: Session = Depends(get_session),
     current_user: Optional[User] = Depends(_get_optional_user),
 ):
-    if session.get(Content, content_id) is None:
-        raise BizError(2001, "内容不存在或已被删除")
+    _require_content(session, content_id)
     _validate_sort(order, COMMENT_ORDER_OPTIONS, "order")
     total = session.exec(
         select(func.count(Comment.id)).where(Comment.content_id == content_id)
@@ -487,8 +488,7 @@ def create_comment(
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ):
-    if session.get(Content, content_id) is None:
-        raise BizError(2001, "内容不存在或已被删除")
+    _require_content(session, content_id)
     comment = Comment(content_id=content_id, author_id=user.id, body=_clean_text(data.body, "评论内容"))
     session.add(comment)
     session.commit()
@@ -504,8 +504,7 @@ def delete_comment(
     user: User = Depends(get_current_user),
 ):
     """删除自己的评论；非作者返回 2003；评论或内容不存在返回 2001。"""
-    if session.get(Content, content_id) is None:
-        raise BizError(2001, "内容不存在或已被删除")
+    _require_content(session, content_id)
     comment = session.get(Comment, comment_id)
     if comment is None or comment.content_id != content_id:
         raise BizError(2001, "评论不存在或已被删除")
