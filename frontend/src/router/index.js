@@ -108,6 +108,12 @@ const routes = [
         meta: { title: '发布拼车', requiresAuth: true }
       },
       {
+        path: 'carpool/publish/:id',
+        name: 'carpool-edit',
+        component: () => import('@/views/CarpoolPublishView.vue'),
+        meta: { title: '编辑拼车', requiresAuth: true }
+      },
+      {
         path: 'carpool/:id',
         name: 'carpool-detail',
         component: () => import('@/views/CarpoolDetailView.vue'),
