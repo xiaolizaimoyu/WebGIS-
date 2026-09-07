@@ -89,6 +89,14 @@ const mapMarkers = computed(() =>
     }))
 )
 
+const hasMapData = computed(() => mapMarkers.value.length > 0)
+
+function resetMapView() {
+  if (mapRef.value && typeof mapRef.value.fitToMarkers === 'function') {
+    mapRef.value.fitToMarkers()
+  }
+}
+
 // 地图加载完成回调
 function onMapReady(olMap) {
   // 地图就绪后自适应标记点范围
@@ -185,11 +193,15 @@ onMounted(load)
       <div class="map-wrapper">
         <div class="map-header">
           <span class="map-title">🗺️ 活动分布地图</span>
-          <el-button text size="small" @click="mapRef?.fitToMarkers()">
+          <el-button text size="small" @click="resetMapView">
             重置视野
           </el-button>
         </div>
+        <div v-if="!hasMapData" class="map-empty">
+          暂无活动点位，先发布一条内容即可展示在地图上。
+        </div>
         <MapComponent
+          v-else
           ref="mapRef"
           :center="mapCenter"
           :zoom="mapZoom"
@@ -316,6 +328,19 @@ onMounted(load)
   border-radius: 12px;
   padding: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.map-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 360px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f5f7ff, #eef4ff);
+  color: #7a879d;
+  font-size: 13px;
+  text-align: center;
+  padding: 16px;
 }
 
 .map-header {
