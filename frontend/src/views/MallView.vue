@@ -84,6 +84,23 @@ function goToMyRecords() {
 const mapCenter = ref([116.397428, 39.90923])
 const mapMarkers = computed(() => [])
 
+function resolveGoodsImage(image) {
+  if (!image) {
+    return 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80'
+  }
+  return image
+}
+
+// 外链图片加载失败（如 Unsplash 被墙/慢）时回退到本地 emoji 占位，避免裂图
+function onImgError(e) {
+  e.target.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>" +
+    "<rect width='100' height='100' fill='%23f0f2f5'/>" +
+    "<text x='50' y='62' font-size='40' text-anchor='middle'>🎁</text></svg>"
+  )
+  e.target.onerror = null
+}
+
 onMounted(() => {
   loadCategories()
   load()
@@ -150,8 +167,12 @@ onMounted(() => {
           class="goods-card"
           @click="toDetail(g.id)"
         >
-          <div class="goods-image">
-            <span class="goods-emoji">{{ g.image }}</span>
+          <div class="goods-image" :style="{ background: g.imageBg || 'linear-gradient(135deg, #667eea, #764ba2)' }">
+            <!-- 真实商品图优先；加载失败时 onImgError 兜底为 emoji 占位 -->
+            <img :src="resolveGoodsImage(g.image)" :alt="g.name" class="goods-cover" @error="onImgError" />
+            <!-- 分类角标 -->
+            <div class="category-badge">{{ g.category }}</div>
+            <!-- 标签 -->
             <div v-if="g.tags && g.tags.length" class="goods-tags">
               <el-tag
                 v-for="t in g.tags.slice(0, 2)"
@@ -163,18 +184,25 @@ onMounted(() => {
                 {{ t }}
               </el-tag>
             </div>
-            <div v-if="g.stock < 20" class="stock-warning">仅剩 {{ g.stock }} 件</div>
+            <!-- 库存警告 -->
+            <div v-if="g.stock < 20" class="stock-warning">🔥 仅剩 {{ g.stock }} 件</div>
           </div>
           <div class="goods-info">
             <h3 class="goods-name">{{ g.name }}</h3>
             <p class="goods-desc">{{ g.description }}</p>
+            <!-- 产品亮点 -->
+            <div v-if="g.features && g.features.length" class="goods-features">
+              <span v-for="(f, i) in g.features.slice(0, 3)" :key="i" class="feature-tag">
+                ✓ {{ f }}
+              </span>
+            </div>
             <div class="goods-footer">
               <div class="goods-price">
                 <span class="price-icon">🪙</span>
-                <span class="price-value">{{ g.points }}</span>
+                <span class="price-value">{{ g.points ?? g.points_price }}</span>
                 <span class="price-unit">积分</span>
               </div>
-              <div class="goods-sold">已兑 {{ g.sold }}</div>
+              <div class="goods-sold">已兑 {{ g.sold ?? 0 }}</div>
             </div>
           </div>
         </div>
@@ -348,21 +376,69 @@ onMounted(() => {
 }
 
 .goods-image {
-  height: 140px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  height: 160px;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
+  overflow: hidden;
+}
+
+/* 装饰圆圈 */
+.deco-circle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  pointer-events: none;
+}
+
+.deco-1 {
+  width: 80px;
+  height: 80px;
+  top: -20px;
+  right: -20px;
+}
+
+.deco-2 {
+  width: 50px;
+  height: 50px;
+  bottom: -10px;
+  left: 20px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.deco-3 {
+  width: 30px;
+  height: 30px;
+  top: 30px;
+  left: 30px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .goods-emoji {
-  font-size: 56px;
+  font-size: 64px;
   transition: transform 0.3s;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
+  position: relative;
+  z-index: 1;
 }
 
 .goods-card:hover .goods-emoji {
-  transform: scale(1.15);
+  transform: scale(1.15) rotate(-5deg);
+}
+
+/* 分类角标 */
+.category-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #303133;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
 }
 
 .goods-tags {
@@ -372,26 +448,30 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  z-index: 2;
 }
 
 .stock-warning {
   position: absolute;
   bottom: 8px;
   right: 8px;
-  background: rgba(245, 108, 108, 0.9);
+  background: rgba(245, 108, 108, 0.95);
   color: #fff;
   font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+  z-index: 2;
 }
 
 .goods-info {
-  padding: 12px;
+  padding: 14px;
 }
 
 .goods-name {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   color: #303133;
   margin: 0 0 6px 0;
   overflow: hidden;
@@ -402,13 +482,33 @@ onMounted(() => {
 .goods-desc {
   font-size: 12px;
   color: #909399;
-  line-height: 1.5;
+  line-height: 1.6;
   margin: 0 0 10px 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  min-height: 36px;
+  min-height: 38px;
+}
+
+/* 产品亮点 */
+.goods-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.feature-tag {
+  font-size: 10px;
+  color: #67c23a;
+  background: #f0f9eb;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .goods-footer {

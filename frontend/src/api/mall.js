@@ -4,14 +4,14 @@ import request from './request'
 // 商品列表：{ category?, page, size } -> { total, items }
 export const listGoods = (params) => request.get('/mall/goods', { params })
 
+// 商品分类（去重列表）
+export const listCategories = () => request.get('/mall/categories')
+
 // 商品详情
 export const getGoods = (id) => request.get(`/mall/goods/${id}`)
 
-// 兑换商品
-export const redeemGoods = (id, quantity = 1) => request.post(`/mall/goods/${id}/redeem`, { quantity })
+// 兑换商品（后端按 goods_id 兑换一个，扣积分+减库存+生成订单）
+export const redeemGoods = (id) => request.post(`/mall/exchange/${id}`)
 
 // 我的兑换记录
-export const myRedeemRecords = (params) => request.get('/mall/my-records', { params })
-
-// 商品分类
-export const listCategories = () => request.get('/mall/categories')
+export const myRedeemRecords = (params) => request.get('/mall/orders/mine', { params })

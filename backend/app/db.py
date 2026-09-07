@@ -19,7 +19,11 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
 
 def _sync_columns() -> None:
-    """给已存在的表补齐 models 中新增但库里缺失的列（幂等）。"""
+    """给已存在的表补齐 models 中新增但库里缺失的列（幂等）。
+
+    补列后自动将已有行的 NULL 值更新为模型默认值（如 points=0, like_count=0），
+    避免旧数据因新列为 NULL 导致业务代码报错。
+    """
     from app import models
 
     inspector = inspect(engine)
@@ -36,6 +40,15 @@ def _sync_columns() -> None:
         "mall_goods": models.MallGoods,
         "orders": models.Order,
     }
+    # 字段默认值映射（补列后用于回填旧数据）
+    default_values = {
+        "points": 0,
+        "like_count": 0,
+        "view_count": 0,
+        "stock": 0,
+        "is_read": 0,
+        "status": "on",
+    }
     for table_name, model in tables.items():
         if not inspector.has_table(table_name):
             continue  # 新表交给 create_all
@@ -48,7 +61,15 @@ def _sync_columns() -> None:
             ddl = f'ALTER TABLE {table_name} ADD COLUMN "{column.name}" {col_type}'
             with engine.connect() as conn:
                 conn.execute(text(ddl))
-            print(f"[db] 已为表 {table_name} 自动补列：{column.name} ({col_type})")
+                # 回填默认值
+                if column.name in default_values:
+                    default = default_values[column.name]
+                    if isinstance(default, str):
+                        conn.execute(text(f'UPDATE {table_name} SET "{column.name}" = :v WHERE "{column.name}" IS NULL'), {"v": default})
+                    else:
+                        conn.execute(text(f'UPDATE {table_name} SET "{column.name}" = {default} WHERE "{column.name}" IS NULL'))
+                conn.commit()
+            print(f"[db] 已为表 {table_name} 自动补列：{column.name} ({col_type})，并回填默认值")
 
 
 def create_db_and_tables() -> None:

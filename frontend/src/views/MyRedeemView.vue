@@ -40,10 +40,23 @@ async function load() {
   }
 }
 
-function getGoodsImage(goodsId) {
+function getGoodsImage(r) {
+  // 后端订单接口已返回 goods_image（本地 /uploads 图）
+  if (r.goods_image) return r.goods_image
+  // mock 兜底：按 goods_id 从 mock 商品中找图
   const goods = getMockGoods()
-  const g = goods.find((x) => x.id === goodsId)
-  return g?.image || '🎁'
+  const g = goods.find((x) => x.id === r.goods_id)
+  return g?.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80'
+}
+
+// 外链图片加载失败时回退到本地 emoji 占位，避免裂图
+function onImgError(e) {
+  e.target.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>" +
+    "<rect width='100' height='100' fill='%23f0f2f5'/>" +
+    "<text x='50' y='62' font-size='40' text-anchor='middle'>🎁</text></svg>"
+  )
+  e.target.onerror = null
 }
 
 function goToMall() {
@@ -101,7 +114,9 @@ onMounted(() => {
         </el-empty>
 
         <div v-for="r in filteredList" :key="r.id" class="record-item">
-          <div class="record-icon">{{ getGoodsImage(r.goods_id) }}</div>
+          <div class="record-icon">
+            <img :src="getGoodsImage(r)" :alt="r.goods_name" class="record-cover" @error="onImgError" />
+          </div>
           <div class="record-info">
             <div class="record-head">
               <h4 class="record-name">{{ r.goods_name }}</h4>
@@ -110,9 +125,9 @@ onMounted(() => {
               </el-tag>
             </div>
             <div class="record-meta">
-              <span>数量：x{{ r.quantity }}</span>
-              <span>消耗：<strong class="points-cost">{{ r.points * r.quantity }}</strong> 积分</span>
-              <span>兑换时间：{{ formatTime(r.redeem_time) }}</span>
+              <span>数量：x{{ r.quantity ?? 1 }}</span>
+              <span>消耗：<strong class="points-cost">{{ (r.points_cost ?? r.points ?? 0) * (r.quantity ?? 1) }}</strong> 积分</span>
+              <span>兑换时间：{{ formatTime(r.redeem_time ?? r.created_at) }}</span>
             </div>
             <div v-if="r.status === 'shipping'" class="record-tracking">
               🚚 商品已发出，预计2-3天送达，请保持电话畅通

@@ -29,11 +29,10 @@ const notifyList = computed(() => notificationStore.list.slice(0, 5))
 // 导航菜单
 const navMenus = [
   { path: '/', label: '首页', icon: '🏠' },
+  { path: '/map', label: '校园地图', icon: '🗺️' },
   { path: '/questions', label: '校园问答', icon: '❓' },
   { path: '/materials', label: '学习资料', icon: '📚' },
   { path: '/carpool', label: '组队拼车', icon: '🚗' },
-  { path: '/lost-found', label: '失物招领', icon: '🔍' },
-  { path: '/map', label: '校园地图', icon: '🗺️' },
   { path: '/mall', label: '积分商城', icon: '🎁' }
 ]
 
@@ -111,20 +110,21 @@ onMounted(() => {
         <router-link to="/" class="brand">🎓 校园活动交流平台</router-link>
 
         <!-- 导航菜单 -->
-        <nav class="nav-menu">
+        <nav class="nav-menu" aria-label="主导航">
           <router-link
             v-for="m in navMenus"
             :key="m.path"
             :to="m.path"
             class="nav-item"
             :class="{ active: isActive(m.path) }"
+            :title="m.label"
           >
             <span class="nav-icon">{{ m.icon }}</span>
             <span class="nav-label">{{ m.label }}</span>
           </router-link>
         </nav>
 
-        <div class="spacer" />
+        <div class="spacer" aria-hidden="true" role="presentation" />
 
         <!-- 签到按钮 -->
         <div v-if="isLoggedIn" class="sign-section" @click="handleSign">
@@ -263,6 +263,7 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   margin-left: 20px;
+  min-width: 0;
 }
 
 .nav-item {
@@ -280,6 +281,13 @@ onMounted(() => {
 .nav-item:hover {
   background: #ecf5ff;
   color: #1d6df0;
+}
+
+.nav-item:focus-visible,
+.user-name:focus-visible,
+.notify-bell:focus-visible {
+  outline: 2px solid #1d6df0;
+  outline-offset: 2px;
 }
 
 .nav-item.active {
@@ -432,6 +440,7 @@ onMounted(() => {
   font-size: 12px;
   color: #606266;
   line-height: 1.4;
+  word-break: break-word;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -506,6 +515,12 @@ onMounted(() => {
   padding: 0;
   background: linear-gradient(180deg, #f5f7fa 0%, #eef1f6 100%);
   min-height: calc(100vh - 64px);
+  /* el-main 默认 overflow:auto 会破坏子元素 sticky 定位（右栏地图固定失效），覆盖为 visible */
+  overflow: visible;
+}
+
+.header-inner > .user-name {
+  min-width: 0;
 }
 
 /* 响应式 */
@@ -524,6 +539,14 @@ onMounted(() => {
   }
   .nav-menu {
     margin-left: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .nav-menu::-webkit-scrollbar {
+    display: none;
+  }
+  .notify-dropdown {
+    width: min(360px, calc(100vw - 24px));
   }
 }
 </style>

@@ -63,7 +63,7 @@ watch(activeType, () => {
 onMounted(async () => {
   await nextTick()
   map = initMap(rootEl.value)
-  layer = L.layerGroup().addTo(map)
+  layer = L.featureGroup().addTo(map)  // featureGroup 才有 getBounds()，layerGroup 没有
   // 容器尺寸稳定后再渲染一次，避免初始化时宽度为 0
   setTimeout(() => { map.invalidateSize(); render() }, 60)
 })

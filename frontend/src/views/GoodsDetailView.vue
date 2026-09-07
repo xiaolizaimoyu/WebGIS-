@@ -18,7 +18,7 @@ const goods = ref(null)
 const quantity = ref(1)
 
 const userPoints = computed(() => store.signStatus?.totalPoints || 0)
-const totalPoints = computed(() => (goods.value?.points || 0) * quantity.value)
+const totalPoints = computed(() => ((goods.value?.points ?? goods.value?.points_price) || 0) * quantity.value)
 const canAfford = computed(() => userPoints.value >= totalPoints.value)
 const hasStock = computed(() => (goods.value?.stock || 0) >= quantity.value)
 
@@ -34,7 +34,11 @@ const redeeming = ref(false)
 
 async function loadDetail() {
   try {
-    goods.value = await mallApi.getGoods(goodsId)
+    const data = await mallApi.getGoods(goodsId)
+    // 后端字段优先，mock 展示增强字段（产品亮点/规格/渐变背景）兜底，
+    // 保证详情页视觉增强在连接真实后端时同样生效
+    const rich = getMockGoodsDetail(goodsId) || {}
+    goods.value = { ...rich, ...data }
   } catch {
     goods.value = getMockGoodsDetail(goodsId)
   }
@@ -116,6 +120,16 @@ async function submitRedeem() {
   }
 }
 
+// 外链图片加载失败（如 Unsplash 被墙/慢）时回退到本地 emoji 占位，避免裂图
+function onImgError(e) {
+  e.target.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>" +
+    "<rect width='100' height='100' fill='%23f0f2f5'/>" +
+    "<text x='50' y='62' font-size='40' text-anchor='middle'>🎁</text></svg>"
+  )
+  e.target.onerror = null
+}
+
 const tagColorMap = {
   '热门': 'danger',
   '新品': 'success',
@@ -136,8 +150,9 @@ onMounted(() => {
       <div class="detail-layout">
         <!-- 左侧商品图 -->
         <div class="goods-image-section">
-          <div class="goods-image-large">
-            <span class="image-emoji">{{ goods.image }}</span>
+          <div class="goods-image-large" :style="{ background: goods.imageBg || 'linear-gradient(135deg, #667eea, #764ba2)' }">
+            <!-- 真实商品图优先；加载失败时 onImgError 兜底为 emoji 占位 -->
+            <img :src="goods.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80'" :alt="goods.name" class="goods-detail-cover" @error="onImgError" />
           </div>
           <div v-if="goods.tags && goods.tags.length" class="goods-tags-large">
             <el-tag
@@ -149,6 +164,16 @@ onMounted(() => {
               {{ t }}
             </el-tag>
           </div>
+          <!-- 产品亮点 -->
+          <div v-if="goods.features && goods.features.length" class="features-box">
+            <div class="features-title">✨ 产品亮点</div>
+            <div class="features-list">
+              <div v-for="(f, i) in goods.features" :key="i" class="feature-item">
+                <span class="feature-check">✓</span>
+                <span class="feature-text">{{ f }}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 右侧商品信息 -->
@@ -157,14 +182,14 @@ onMounted(() => {
 
           <div class="goods-category">
             <el-tag size="small">{{ goods.category }}</el-tag>
-            <span class="sold-count">已兑换 {{ goods.sold }} 件</span>
+            <span class="sold-count">已兑换 {{ goods.sold ?? 0 }} 件</span>
           </div>
 
           <div class="price-section">
             <div class="price-label">兑换价</div>
             <div class="price-value">
               <span class="price-icon">🪙</span>
-              <span class="price-num">{{ goods.points }}</span>
+              <span class="price-num">{{ goods.points ?? goods.points_price }}</span>
               <span class="price-unit">积分</span>
             </div>
             <div class="my-points">
@@ -208,6 +233,14 @@ onMounted(() => {
       <div class="description-section">
         <div class="section-title">📋 商品详情</div>
         <div class="description-content">{{ goods.description }}</div>
+      </div>
+
+      <!-- 规格参数 -->
+      <div v-if="goods.specs" class="specs-section">
+        <div class="section-title">📐 规格参数</div>
+        <div class="specs-content">
+          <span class="specs-text">{{ goods.specs }}</span>
+        </div>
       </div>
 
       <!-- 兑换说明 -->
@@ -285,29 +318,123 @@ onMounted(() => {
 }
 
 .goods-image-section {
-  width: 320px;
+  width: 340px;
   flex-shrink: 0;
 }
 
 .goods-image-large {
   width: 100%;
-  height: 280px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
-  border-radius: 12px;
+  height: 300px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+/* 装饰圆圈 */
+.deco-circle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  pointer-events: none;
+}
+
+.deco-1 {
+  width: 120px;
+  height: 120px;
+  top: -30px;
+  right: -30px;
+}
+
+.deco-2 {
+  width: 80px;
+  height: 80px;
+  bottom: -20px;
+  left: 30px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.deco-3 {
+  width: 50px;
+  height: 50px;
+  top: 40px;
+  left: 40px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.deco-4 {
+  width: 30px;
+  height: 30px;
+  bottom: 60px;
+  right: 50px;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .image-emoji {
-  font-size: 100px;
+  font-size: 110px;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.2));
+  position: relative;
+  z-index: 1;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
 }
 
 .goods-tags-large {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+/* 产品亮点 */
+.features-box {
+  background: #f8faff;
+  border-radius: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e8edf5;
+}
+
+.features-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #303133;
+  margin-bottom: 10px;
+}
+
+.features-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.feature-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #67c23a, #85ce61);
+  color: #fff;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 700;
 }
 
 .goods-info-section {
@@ -458,6 +585,27 @@ onMounted(() => {
   color: #4b4b4b;
   line-height: 1.9;
   white-space: pre-wrap;
+}
+
+/* 规格参数 */
+.specs-section {
+  padding-top: 20px;
+  border-top: 1px solid #f0f2f5;
+  margin-top: 20px;
+}
+
+.specs-content {
+  background: linear-gradient(135deg, #f8faff 0%, #f0f5ff 100%);
+  border-radius: 10px;
+  padding: 16px 20px;
+  border-left: 4px solid #1d6df0;
+}
+
+.specs-text {
+  font-size: 13px;
+  color: #4b4b4b;
+  line-height: 1.9;
+  letter-spacing: 0.3px;
 }
 
 .rules-list {

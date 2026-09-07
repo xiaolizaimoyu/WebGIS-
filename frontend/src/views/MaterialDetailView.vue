@@ -7,6 +7,7 @@ import * as materialApi from '@/api/material'
 import { formatTime } from '@/api/const'
 import { getMockMaterialDetail } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
+import { storage } from '@/utils/storage'
 
 const route = useRoute()
 const router = useRouter()
@@ -36,10 +37,34 @@ async function handleDownload() {
     return
   }
   try {
-    await materialApi.downloadMaterial(materialId)
-    ElMessage.success('下载已开始')
+    // 真实下载：后端动态生成文件，浏览器直接保存（绕过 JSON 拦截器）
+    const token = storage.getToken()
+    const res = await fetch(`/api/materials/${materialId}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => null)
+      ElMessage.error(err?.msg || '下载失败，请稍后重试')
+      return
+    }
+    const blob = await res.blob()
+    // 从 Content-Disposition 解析文件名（UTF-8 编码）
+    const cd = res.headers.get('Content-Disposition') || ''
+    const m = cd.match(/filename\*=UTF-8''([^;]+)/) || cd.match(/filename="([^"]+)/)
+    const filename = m ? decodeURIComponent(m[1]) : `资料${materialId}.pdf`
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    // 下载数 +1（本地乐观更新）
+    if (material.value) material.value.downloads = (material.value.downloads || 0) + 1
+    ElMessage.success('下载成功')
   } catch {
-    ElMessage.success('下载已开始（模拟）')
+    ElMessage.error('下载失败，请稍后重试')
   }
 }
 
@@ -51,12 +76,13 @@ async function handleLike() {
   }
   liking.value = true
   try {
-    await materialApi.likeMaterial(materialId)
-    material.value.likes++
+    const data = await materialApi.likeMaterial(materialId)
+    // 后端返回最新点赞数；未返回时兜底 +1，杜绝 NaN
+    material.value.likes = data?.likes ?? (material.value.likes || 0) + 1
     ElMessage.success('点赞成功')
   } catch {
-    material.value.likes++
-    ElMessage.success('点赞成功')
+    material.value.likes = (material.value.likes || 0) + 1
+    ElMessage.success('点赞成功（网络异常，已本地+1）')
   } finally {
     liking.value = false
   }
@@ -98,7 +124,7 @@ onMounted(loadDetail)
           <span class="stat-label">下载量</span>
         </div>
         <div class="stat-item">
-          <span class="stat-num">{{ material.likes }}</span>
+          <span class="stat-num">{{ material.likes || 0 }}</span>
           <span class="stat-label">点赞数</span>
         </div>
         <div class="stat-item">
@@ -112,7 +138,7 @@ onMounted(loadDetail)
           ⬇️ 下载资料
         </el-button>
         <el-button size="large" :loading="liking" @click="handleLike">
-          ❤️ 点赞 ({{ material.likes }})
+          ❤️ 点赞 ({{ material.likes || 0 }})
         </el-button>
         <el-button size="large" @click="router.back()">
           ← 返回

@@ -22,6 +22,7 @@ from app.routers import user as user_router
 from app.routers import social as social_router
 from app.routers import points as points_router
 from app.routers import mall as mall_router
+from app.routers import extensions as extensions_router
 
 
 @asynccontextmanager
@@ -58,6 +59,7 @@ app.include_router(social_router.router)
 app.include_router(points_router.router, prefix="/api/points")
 app.include_router(points_router.notify_router)
 app.include_router(mall_router.router)
+app.include_router(extensions_router.router, prefix="/api")
 
 # 上传图片的静态访问：/uploads/xxx.png
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
