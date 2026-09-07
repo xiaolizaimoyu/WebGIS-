@@ -14,7 +14,10 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 
-from app.core.response import ok
+from fastapi.responses import Response
+
+from app.core.response import ok, BizError
+from app.routers.material_docs import generate_material_file
 from app.core.security import get_current_user
 from app.db import get_session
 from app.models import User
@@ -145,6 +148,25 @@ def get_material(mid: int):
         from app.core.response import BizError
         raise BizError(404, "资料不存在")
     return ok(m)
+
+
+@router.get("/materials/{mid}/download", summary="下载资料（真实文件）")
+def download_material(mid: int):
+    """按资料 ID 动态生成真实 PDF/DOCX 文件返回浏览器下载，下载次数 +1"""
+    m = next((m for m in _materials if m["id"] == mid), None)
+    if not m:
+        raise BizError(404, "资料不存在")
+    try:
+        data, filename, media_type = generate_material_file(mid, m["title"])
+    except ValueError:
+        raise BizError(404, "该资料暂未提供下载文件")
+    m["download_count"] += 1
+    # 中文文件名需 RFC 5987 编码，保证浏览器正确保存
+    from urllib.parse import quote
+    filename_quoted = quote(filename)
+    disposition = 'attachment; filename="{}*; filename*=UTF-8\'\'{}"'.format(filename_quoted, filename_quoted)
+    return Response(content=data, media_type=media_type,
+                    headers={"Content-Disposition": disposition})
 
 
 # ==================== 组队拼车 ====================

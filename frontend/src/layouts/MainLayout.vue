@@ -515,6 +515,8 @@ onMounted(() => {
   padding: 0;
   background: linear-gradient(180deg, #f5f7fa 0%, #eef1f6 100%);
   min-height: calc(100vh - 64px);
+  /* el-main 默认 overflow:auto 会破坏子元素 sticky 定位（右栏地图固定失效），覆盖为 visible */
+  overflow: visible;
 }
 
 .header-inner > .user-name {

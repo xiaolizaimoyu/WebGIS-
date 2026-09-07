@@ -69,6 +69,29 @@ function renderMarkers() {
   })
 }
 
+// 定位高亮样式：标记放大 1.4 倍并改为红色
+function createHighlightStyle(title) {
+  return new Style({
+    image: new Icon({
+      anchor: [0.5, 1],
+      src: 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="44" height="56" viewBox="0 0 32 40">
+          <path d="M16 0C7.16 0 0 7.16 0 16c0 12 16 24 16 24s16-12 16-24C32 7.16 24.84 0 16 0z" fill="#f56c6c" stroke="#fff" stroke-width="2"/>
+          <circle cx="16" cy="16" r="7" fill="#fff"/>
+        </svg>
+      `),
+      scale: 1.4
+    }),
+    text: new Text({
+      text: title || '',
+      offsetY: -56,
+      font: 'bold 13px sans-serif',
+      fill: new Fill({ color: '#f56c6c' }),
+      stroke: new Stroke({ color: '#fff', width: 3 })
+    })
+  })
+}
+
 // 初始化地图
 function initMap() {
   if (!mapEl.value) return
@@ -171,6 +194,16 @@ defineExpose({
   fitToMarkers: () => {
     if (!olMap || !vectorSource || vectorSource.getFeatures().length === 0) return
     olMap.getView().fit(vectorSource.getExtent(), { padding: [40, 40, 40, 40], maxZoom: 15 })
+  },
+  highlightMarker: (id) => {
+    if (!vectorSource) return
+    const feature = vectorSource.getFeatures().find((f) => f.get('markerId') === id)
+    if (!feature) return
+    const origin = feature.getStyle()
+    feature.setStyle(createHighlightStyle(feature.get('markerTitle')))
+    setTimeout(() => {
+      if (vectorSource.getFeatures().includes(feature)) feature.setStyle(origin)
+    }, 3000)
   },
   updateSize: () => {
     if (olMap) {

@@ -17,6 +17,7 @@ const route = useRoute()
 const router = useRouter()
 const dialog = useDialogStore()
 const mapRef = ref(null)
+const mapWrap = ref(null)
 
 // 顶部 Tab：全部 + 分类（value='all' 代表全部，请求时转 undefined）
 const tabs = [
@@ -214,11 +215,13 @@ function onMarkerClick(marker) {
   })
 }
 
-// 信息流卡片点击定位到地图
+// 信息流卡片点击定位到地图：滚动地图到可视区域 + 居中 + 高亮标记
 function locateOnMap(item) {
-  if (item.longitude && item.latitude && mapRef.value) {
-    mapRef.value.setCenter(item.longitude, item.latitude, 15)
-  }
+  if (!item.longitude || !item.latitude || !mapRef.value) return
+  mapRef.value.setCenter(item.longitude, item.latitude, 15)
+  mapRef.value.highlightMarker?.(item.id)
+  // 把地图滚动到视野内（窄屏/未固定时兜底）
+  mapWrap.value?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 </script>
@@ -280,7 +283,7 @@ function locateOnMap(item) {
 
     <!-- 右侧：地图 -->
     <div class="right-panel">
-      <div class="map-wrapper">
+      <div ref="mapWrap" class="map-wrapper">
         <div class="map-header">
           <span class="map-title">🗺️ 活动分布地图</span>
           <el-button text size="small" @click="resetMapView">
