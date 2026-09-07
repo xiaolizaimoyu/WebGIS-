@@ -219,8 +219,7 @@ def list_contents(
     if keyword:
         filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
     if has_location:
-        # 地图只渲染拾取过地理位置的帖子
-        filters.append(Content.longitude.is_not(None))
+        # 地图只渲染拾取过地理位置的帖子，经纬度必然成对（创建时已校验），用一个条件即可
         filters.append(Content.latitude.is_not(None))
     total = session.exec(select(func.count(Content.id)).where(*filters)).one()
     if sort == "hot":
