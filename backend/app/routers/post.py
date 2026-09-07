@@ -56,7 +56,7 @@ def _normalize_category(content_type: str, category: Optional[str]) -> Optional[
     return category
 
 
-def _normalize_location(longitude: Optional[float], latitude: Optional[float]):
+def _normalize_location(longitude: Optional[float], latitude: Optional[float]) -> tuple:
     """经纬度成对校验：只传一个视为参数错误；都不传返回 (None, None)。"""
     if longitude is None and latitude is None:
         return None, None
@@ -161,6 +161,50 @@ def comments_count_map(session: Session, content_ids: List[int]) -> dict:
     return {content_id: count for content_id, count in rows}
 
 
+def _query_contents_page(
+    session: Session,
+    filters: list,
+    sort: str,
+    page: int,
+    size: int,
+) -> tuple:
+    """内容分页查询公共逻辑：返回 (items, count_map, total)。
+
+    - sort=hot：子查询带回评论数，一次拿到排序依据和展示数据；
+    - sort=latest：普通查询 + 批量统计评论数。
+    list_contents 与 list_my_contents 共用，避免分页/排序/计数逻辑重复。
+    """
+    total = session.exec(select(func.count(Content.id)).where(*filters)).one()
+    if sort == "hot":
+        count_sub = (
+            select(Comment.content_id, func.count(Comment.id).label("cc"))
+            .group_by(Comment.content_id)
+            .subquery()
+        )
+        stmt = (
+            select(Content, func.coalesce(count_sub.c.cc, 0).label("comment_count"))
+            .outerjoin(count_sub, count_sub.c.content_id == Content.id)
+            .where(*filters)
+            .order_by(func.coalesce(count_sub.c.cc, 0).desc(), Content.created_at.desc(), Content.id.desc())
+            .offset((page - 1) * size)
+            .limit(size)
+        )
+        rows = session.exec(stmt).all()
+        items = [r[0] for r in rows]
+        count_map = {r[0].id: r[1] for r in rows}
+    else:
+        stmt = (
+            select(Content)
+            .where(*filters)
+            .order_by(Content.created_at.desc(), Content.id.desc())
+            .offset((page - 1) * size)
+            .limit(size)
+        )
+        items = session.exec(stmt).all()
+        count_map = comments_count_map(session, [c.id for c in items])
+    return items, count_map, total
+
+
 # ---------- 图片上传 ----------
 @router.post("/upload", summary="上传图片（需登录）")
 async def upload_image(
@@ -171,6 +215,7 @@ async def upload_image(
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
         raise BizError(400, "仅支持 jpg / jpeg / png / gif 格式图片")
     data = await file.read()
+    await file.close()
     if len(data) > MAX_IMAGE_SIZE:
         raise BizError(400, "图片不能超过 5MB")
 
@@ -236,35 +281,7 @@ def list_contents(
     if has_location:
         # 地图只渲染拾取过地理位置的帖子，经纬度必然成对（创建时已校验），用一个条件即可
         filters.append(Content.latitude.is_not(None))
-    total = session.exec(select(func.count(Content.id)).where(*filters)).one()
-    if sort == "hot":
-        # 热门排序：子查询同时带回评论数，一次拿到排序依据和展示数据
-        count_sub = (
-            select(Comment.content_id, func.count(Comment.id).label("cc"))
-            .group_by(Comment.content_id)
-            .subquery()
-        )
-        stmt = (
-            select(Content, func.coalesce(count_sub.c.cc, 0).label("comment_count"))
-            .outerjoin(count_sub, count_sub.c.content_id == Content.id)
-            .where(*filters)
-            .order_by(func.coalesce(count_sub.c.cc, 0).desc(), Content.created_at.desc(), Content.id.desc())
-            .offset((page - 1) * size)
-            .limit(size)
-        )
-        rows = session.exec(stmt).all()
-        items = [r[0] for r in rows]
-        count_map = {r[0].id: r[1] for r in rows}
-    else:
-        stmt = (
-            select(Content)
-            .where(*filters)
-            .order_by(Content.created_at.desc(), Content.id.desc())
-            .offset((page - 1) * size)
-            .limit(size)
-        )
-        items = session.exec(stmt).all()
-        count_map = comments_count_map(session, [c.id for c in items])
+    items, count_map, total = _query_contents_page(session, filters, sort, page, size)
     name_map = users_nickname_map(session, [c.author_id for c in items])
     return ok({
         "total": total,
@@ -284,6 +301,7 @@ def list_contents(
 def list_my_contents(
     type: Optional[str] = Query(default=None, description="按 type 筛选，不传为全部"),
     keyword: Optional[str] = Query(default=None, max_length=50, description="关键词搜索：匹配标题或正文，不传为不搜索"),
+    sort: str = Query(default="latest", description="排序：latest(默认) | hot(按评论数降序)"),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, ge=1, le=50),
     session: Session = Depends(get_session),
@@ -295,6 +313,8 @@ def list_my_contents(
     否则 "mine" 会被当成 id 解析而报 422。
     """
     _validate_optional_type(type)
+    if sort not in SORT_OPTIONS:
+        raise BizError(400, f"排序参数 sort 仅支持：{' | '.join(SORT_OPTIONS)}")
 
     filters = [Content.author_id == user.id]
     if type:
@@ -302,18 +322,7 @@ def list_my_contents(
     keyword = (keyword or "").strip()
     if keyword:
         filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
-    total = session.exec(
-        select(func.count(Content.id)).where(*filters)
-    ).one()
-    stmt = (
-        select(Content)
-        .where(*filters)
-        .order_by(Content.created_at.desc(), Content.id.desc())
-        .offset((page - 1) * size)
-        .limit(size)
-    )
-    items = session.exec(stmt).all()
-    count_map = comments_count_map(session, [c.id for c in items])
+    items, count_map, total = _query_contents_page(session, filters, sort, page, size)
     return ok({
         "total": total,
         "total_pages": (total + size - 1) // size,
