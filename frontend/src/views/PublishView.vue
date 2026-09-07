@@ -4,7 +4,7 @@
 // - 带 :id 路由（/publish/:id）＝ 编辑已有内容（仅作者可进入，编辑由后端校验权限）
 // 说明：本路由 requiresAuth，未登录会被全局守卫拦截到登录页
 // TODO(前端B)：草稿、富文本编辑器、发布后二次编辑预览等扩展点
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as postApi from '@/api/post'
@@ -26,6 +26,49 @@ const form = reactive({
   category: '',
   location: null // 选点结果 { lng, lat } | null；提交时映射为后端的 longitude / latitude
 })
+
+// ===== 草稿自动保存（前端 B，规划书 TODO：草稿箱）=====
+// 仅"新建发布"时生效：输入停顿 600ms 自动存 localStorage，发布成功后清除；
+// 编辑已有内容不写草稿（改的是线上数据，无草稿语义）。
+// key 独立前缀，不与队友的 utils/storage.js（auth 专用）混用。
+const DRAFT_KEY = 'campus_draft_publish_B'
+let draftTimer = null
+
+watch(
+  () => ({ title: form.title, body: form.body, type: form.type }),
+  (val) => {
+    if (isEdit.value) return
+    if (!val.title.trim() && !val.body.trim()) return // 空表单不存
+    clearTimeout(draftTimer)
+    draftTimer = setTimeout(() => {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...val, savedAt: Date.now() }))
+    }, 600)
+  }
+)
+
+function restoreDraft() {
+  try {
+    const draft = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null')
+    if (!draft) return
+    // 草稿超过 7 天视为过期，直接丢弃
+    if (Date.now() - draft.savedAt > 7 * 24 * 3600 * 1000) {
+      localStorage.removeItem(DRAFT_KEY)
+      return
+    }
+    form.title = draft.title || ''
+    form.body = draft.body || ''
+    form.type = draft.type || 'meeting'
+    if (form.title || form.body) {
+      ElMessage.info('已恢复上次未发布的草稿')
+    }
+  } catch {
+    localStorage.removeItem(DRAFT_KEY)
+  }
+}
+
+function clearDraft() {
+  localStorage.removeItem(DRAFT_KEY)
+}
 
 const rules = {
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
@@ -105,6 +148,7 @@ async function submit() {
       router.push('/mine') // 编辑后回到我的发布，列表自动刷新
     } else {
       data = await postApi.createContent(payload)
+      clearDraft() // 发布成功，草稿使命完成
       ElMessage.success('发布成功')
       router.push(`/content/${data.id}`)
     }
