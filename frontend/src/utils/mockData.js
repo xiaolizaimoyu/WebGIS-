@@ -264,18 +264,20 @@ export function getMockMyApplications() {
 
 // ====== 积分商城 Mock ======
 const mallImageUrls = [
-  'https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1524578271613-d550eacf6090?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=900&q=80'
+  // 本地真实商品图（backend/uploads/mall/，由 vite 代理 /uploads 到后端）
+  // 按 mock 商品主题分配：笔记本/马克杯/学习资料(图书馆)/白色织品/数码
+  '/mall/goods_1.jpg', // 1 校园定制笔记本
+  '/mall/goods_2.jpg', // 2 定制马克杯
+  '/mall/goods_4.jpg', // 3 高数押题卷-图书馆学习场景
+  '/mall/goods_5.jpg', // 4 校园帆布袋-白色织品
+  '/mall/goods_4.jpg', // 5 四级词汇手册-图书馆
+  '/mall/goods_6.jpg', // 6 定制U盘-数码
+  '/mall/goods_4.jpg', // 7 占座神器-图书馆
+  '/mall/goods_4.jpg', // 8 考研思维导图-图书馆
+  '/mall/goods_2.jpg', // 9 运动水壶-杯具
+  '/mall/goods_6.jpg', // 10 蓝牙耳机
+  '/mall/goods_4.jpg', // 11 GIS实验指导书-图书馆
+  '/mall/goods_5.jpg'  // 12 定制抱枕-白色软织品
 ]
 
 export function getMockGoods() {

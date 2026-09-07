@@ -34,8 +34,21 @@ const page = ref(1)
 const size = ref(8)
 const loading = ref(false)
 
+// setup 阶段恢复缓存：返回首页时首屏直接渲染上次内容，避免空白/一闪
+if (cachedType === activeType.value && cachedList.length) {
+  list.value = cachedList
+  total.value = cachedTotal
+}
+
 // 请求序号：防止快速切换 tab/翻页时旧请求晚返回覆盖新结果
 let loadSeq = 0
+
+// ====== 列表缓存（模块级，跨组件重建保留） ======
+// 作用：从详情页返回首页时，先展示上次成功加载的内容，再后台刷新，
+// 即使请求慢/失败也不出现空白；切分类后缓存按分类失效。
+let cachedList = []
+let cachedTotal = 0
+let cachedType = ''
 
 // 统一坐标字段：后端返回 longitude/latitude，兼容 mock 的 lng/lat
 function normalizeItem(item) {
@@ -48,7 +61,14 @@ function normalizeItem(item) {
 
 async function load() {
   const seq = ++loadSeq
-  loading.value = true
+  // 有同分类缓存：立即展示缓存内容并后台刷新（不遮罩，返回首页不空白）
+  if (cachedType === activeType.value && cachedList.length) {
+    list.value = cachedList
+    total.value = cachedTotal
+    loading.value = false
+  } else {
+    loading.value = true
+  }
   try {
     const data = await postApi.listContents({
       type: activeType.value === 'all' ? undefined : activeType.value,
@@ -58,11 +78,19 @@ async function load() {
     if (seq !== loadSeq) return // 已被更新的请求取代
     list.value = (data.items || []).map(normalizeItem)
     total.value = data.total || 0
+    // 仅缓存第一页（翻页不覆盖缓存），按分类记录
+    if (page.value === 1) {
+      cachedList = list.value
+      cachedTotal = total.value
+      cachedType = activeType.value
+    }
   } catch (e) {
     if (seq !== loadSeq) return
-    // 后端未启动时使用模拟数据，确保前端可独立运行
-    list.value = getMockContents().map(normalizeItem)
-    total.value = list.value.length
+    // 请求失败：有同分类缓存则保留缓存展示；否则用 mock 兜底，绝不空白
+    if (!(cachedType === activeType.value && cachedList.length)) {
+      list.value = getMockContents().map(normalizeItem)
+      total.value = list.value.length
+    }
   } finally {
     if (seq === loadSeq) loading.value = false
   }

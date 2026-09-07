@@ -76,13 +76,13 @@ COMMENTS = [
 
 # 积分商城演示商品
 MALL_GOODS = [
-    ("演示-校园定制笔记本", "校园风景封面，A5 尺寸，100页", 100, 50, "文具"),
-    ("演示-定制马克杯", "陶瓷马克杯，可印校园logo，350ml", 150, 30, "生活用品"),
-    ("演示-食堂代金券5元", "校内食堂通用，无门槛", 200, 100, "餐饮"),
-    ("演示-图书馆免占座券", "期末周专用，一次免预约占座", 300, 20, "服务"),
-    ("演示-校园文化衫", "纯棉短袖，校园logo印花，M/L/XL", 500, 15, "服饰"),
-    ("演示-蓝牙耳机", "入门级蓝牙耳机，续航4小时", 800, 5, "数码"),
-    ("演示-充电宝10000mAh", "轻薄便携，双向快充", 1200, 8, "数码"),
+    ("演示-校园定制笔记本", "校园风景封面，A5 尺寸，100页", 100, 50, "文具", "/mall/goods_1.jpg"),
+    ("演示-定制马克杯", "陶瓷马克杯，可印校园logo，350ml", 150, 30, "生活用品", "/mall/goods_2.jpg"),
+    ("演示-食堂代金券5元", "校内食堂通用，无门槛", 200, 100, "餐饮", "/mall/goods_3.jpg"),
+    ("演示-图书馆免占座券", "期末周专用，一次免预约占座", 300, 20, "服务", "/mall/goods_4.jpg"),
+    ("演示-校园文化衫", "纯棉短袖，校园logo印花，M/L/XL", 500, 15, "服饰", "/mall/goods_5.jpg"),
+    ("演示-蓝牙耳机", "入门级蓝牙耳机，续航4小时", 800, 5, "数码", "/mall/goods_6.jpg"),
+    ("演示-充电宝10000mAh", "轻薄便携，双向快充", 1200, 8, "数码", "/mall/goods_7.jpg"),
 ]
 
 
@@ -256,8 +256,8 @@ def run() -> None:
 
         # 10) 演示商城商品
         goods_list = []
-        for name, desc, price, stock, category in MALL_GOODS:
-            g = MallGoods(name=name, description=desc, image=img_urls[len(goods_list) % len(img_urls)],
+        for name, desc, price, stock, category, image in MALL_GOODS:
+            g = MallGoods(name=name, description=desc, image=image,
                           points_price=price, stock=stock, status="on", category=category)
             session.add(g)
             goods_list.append(g)
