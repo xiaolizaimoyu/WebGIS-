@@ -114,13 +114,14 @@ onMounted(() => {
             :to="m.path"
             class="nav-item"
             :class="{ active: isActive(m.path) }"
+            :title="m.label"
           >
             <span class="nav-icon">{{ m.icon }}</span>
             <span class="nav-label">{{ m.label }}</span>
           </router-link>
         </nav>
 
-        <div class="spacer" />
+        <div class="spacer" aria-hidden="true" />
 
         <!-- 签到按钮 -->
         <div v-if="isLoggedIn" class="sign-section" @click="handleSign">

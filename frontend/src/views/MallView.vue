@@ -179,6 +179,8 @@ onMounted(() => {
           v-for="g in list"
           :key="g.id"
           class="goods-card"
+          :aria-label="`查看商品：${g.name}`"
+          role="button"
           @click="toDetail(g.id)"
         >
           <div class="goods-image">
