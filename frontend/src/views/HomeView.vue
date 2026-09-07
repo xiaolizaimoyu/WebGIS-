@@ -3,12 +3,8 @@
 // 左侧：前端 B 的业务信息流（保留原有逻辑）
 // 右侧：前端 A 的地图组件
 // 天气组件（前端 B）为全局右上角悬浮，已在 MainLayout 中挂载
-<<<<<<< HEAD
-import { onMounted, ref, computed } from 'vue'
-=======
 // 已加固：请求竞态保护（快速切换不串数据）、真实字段 longitude/latitude、mock 兜底归一化
 import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
->>>>>>> origin/main
 import { useRoute, useRouter } from 'vue-router'
 import * as postApi from '@/api/post'
 import { formatTime, TYPE_MAP } from '@/api/const'
