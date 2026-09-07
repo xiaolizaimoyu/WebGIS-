@@ -29,7 +29,7 @@ class ContentIn(BaseModel):
     body: str = Field(min_length=1, max_length=5000)
     type: str = Field(description="meeting | news | food | lost")
     category: Optional[str] = Field(default=None, max_length=20)
-    images: List[str] = Field(default_factory=list)
+    images: List[str] = Field(default_factory=list, max_items=9, description="图片 URL 列表，最多 9 张")
     # WebGIS 新增：地图选点经纬度，可不传；传则必须经/纬成对且范围合法
     longitude: Optional[float] = Field(default=None, ge=-180, le=180, description="经度")
     latitude: Optional[float] = Field(default=None, ge=-90, le=90, description="纬度")

@@ -60,12 +60,11 @@ def _normalize_location(longitude: Optional[float], latitude: Optional[float]):
 
 def _ensure_valid_type(content_type: str) -> None:
     """type 合法性校验（创建 / 编辑共用）。"""
-    if content_type not in VALID_TYPES:
-        raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
+    _validate_optional_type(content_type)
 
 
 def _validate_optional_type(content_type: Optional[str]) -> None:
-    """列表接口的 type 筛选校验：None 不校验，非空则必须合法。"""
+    """type 筛选校验：None 不校验，非空则必须合法。列表接口直接用，创建/编辑经 _ensure_valid_type 复用。"""
     if content_type is not None and content_type not in VALID_TYPES:
         raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
 
@@ -118,8 +117,8 @@ def content_to_dict(content: Content, author_name: str, comment_count: int = 0, 
     return d
 
 
-def comment_to_dict(comment: Comment, author_name: str) -> dict:
-    return {
+def comment_to_dict(comment: Comment, author_name: str, is_author: Optional[bool] = None) -> dict:
+    d = {
         "id": comment.id,
         "content_id": comment.content_id,
         "author_id": comment.author_id,
@@ -127,6 +126,10 @@ def comment_to_dict(comment: Comment, author_name: str) -> dict:
         "body": comment.body,
         "created_at": comment.created_at,
     }
+    # 评论列表可选鉴权时传入，前端据此显示删除按钮
+    if is_author is not None:
+        d["is_author"] = is_author
+    return d
 
 
 def users_nickname_map(session: Session, ids: List[int]) -> dict:
@@ -223,7 +226,7 @@ def list_contents(
         filters.append(Content.latitude.is_not(None))
     total = session.exec(select(func.count(Content.id)).where(*filters)).one()
     if sort == "hot":
-        # 热门排序：先按评论数降序，再按时间降序稳定排
+        # 热门排序：子查询同时带回评论数，一次拿到排序依据和展示数据
         count_sub = (
             select(Comment.content_id, func.count(Comment.id).label("cc"))
             .group_by(Comment.content_id)
@@ -239,9 +242,7 @@ def list_contents(
         )
         rows = session.exec(stmt).all()
         items = [r[0] for r in rows]
-        # 热门排序时子查询已带回全部评论数，无需再查 count_map
-        hot_counts = {r[0].id: r[1] for r in rows}
-        count_map = {}
+        count_map = {r[0].id: r[1] for r in rows}
     else:
         stmt = (
             select(Content)
@@ -251,7 +252,6 @@ def list_contents(
             .limit(size)
         )
         items = session.exec(stmt).all()
-        hot_counts = None
         count_map = comments_count_map(session, [c.id for c in items])
     name_map = users_nickname_map(session, [c.author_id for c in items])
     return ok({
@@ -261,7 +261,7 @@ def list_contents(
             content_to_dict(
                 c,
                 name_map.get(c.author_id, "未知用户"),
-                hot_counts.get(c.id, 0) if hot_counts else count_map.get(c.id, 0),
+                count_map.get(c.id, 0),
             )
             for c in items
         ],
@@ -393,6 +393,7 @@ def get_content(content_id: int, request: Request, session: Session = Depends(ge
 @router.get("/contents/{content_id}/comments", summary="评论列表（分页）")
 def list_comments(
     content_id: int,
+    request: Request,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=20, ge=1, le=100),
     session: Session = Depends(get_session),
@@ -410,10 +411,20 @@ def list_comments(
         .limit(size)
     ).all()
     name_map = users_nickname_map(session, [c.author_id for c in rows])
+    # 可选鉴权：已登录时每条评论附带 is_author，前端据此显示删除按钮
+    current_user = _get_optional_user(request, session)
+    current_uid = current_user.id if current_user is not None else None
     return ok({
         "total": total,
         "total_pages": (total + size - 1) // size,
-        "items": [comment_to_dict(c, name_map.get(c.author_id, "未知用户")) for c in rows],
+        "items": [
+            comment_to_dict(
+                c,
+                name_map.get(c.author_id, "未知用户"),
+                (c.author_id == current_uid) if current_uid is not None else None,
+            )
+            for c in rows
+        ],
     })
 
 
