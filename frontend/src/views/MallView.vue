@@ -91,6 +91,16 @@ function resolveGoodsImage(image) {
   return image
 }
 
+// 外链图片加载失败（如 Unsplash 被墙/慢）时回退到本地 emoji 占位，避免裂图
+function onImgError(e) {
+  e.target.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>" +
+    "<rect width='100' height='100' fill='%23f0f2f5'/>" +
+    "<text x='50' y='62' font-size='40' text-anchor='middle'>🎁</text></svg>"
+  )
+  e.target.onerror = null
+}
+
 onMounted(() => {
   loadCategories()
   load()
@@ -158,7 +168,7 @@ onMounted(() => {
           @click="toDetail(g.id)"
         >
           <div class="goods-image">
-            <img :src="resolveGoodsImage(g.image)" :alt="g.name" class="goods-cover" />
+            <img :src="resolveGoodsImage(g.image)" :alt="g.name" class="goods-cover" @error="onImgError" />
             <div v-if="g.tags && g.tags.length" class="goods-tags">
               <el-tag
                 v-for="t in g.tags.slice(0, 2)"
@@ -178,10 +188,10 @@ onMounted(() => {
             <div class="goods-footer">
               <div class="goods-price">
                 <span class="price-icon">🪙</span>
-                <span class="price-value">{{ g.points }}</span>
+                <span class="price-value">{{ g.points ?? g.points_price }}</span>
                 <span class="price-unit">积分</span>
               </div>
-              <div class="goods-sold">已兑 {{ g.sold }}</div>
+              <div class="goods-sold">已兑 {{ g.sold ?? 0 }}</div>
             </div>
           </div>
         </div>

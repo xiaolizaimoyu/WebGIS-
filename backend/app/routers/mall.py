@@ -29,6 +29,16 @@ def list_goods(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100),
                "items": [_goods_dict(g) for g in items]})
 
 
+@router.get("/categories", summary="商品分类列表")
+def list_categories(session: Session = Depends(get_session)):
+    """返回商城所有商品分类（去重，按名称排序）。"""
+    rows = session.exec(
+        select(MallGoods.category).where(MallGoods.status == "on").distinct()
+    ).all()
+    categories = sorted([c for c in rows if c])
+    return ok(categories)
+
+
 @router.get("/goods/{goods_id}", summary="商品详情")
 def get_goods(goods_id: int, session: Session = Depends(get_session)):
     g = session.get(MallGoods, goods_id)
@@ -82,8 +92,15 @@ def my_orders(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100),
     stmt = select(Order).where(Order.user_id == user.id).order_by(Order.created_at.desc())
     total = len(session.exec(stmt).all())
     items = session.exec(stmt.offset((page - 1) * size).limit(size)).all()
+    # 批量查商品图片，避免 N+1
+    goods_ids = [o.goods_id for o in items if o.goods_id]
+    goods_map = {}
+    if goods_ids:
+        goods_rows = session.exec(select(MallGoods).where(MallGoods.id.in_(goods_ids))).all()
+        goods_map = {g.id: g for g in goods_rows}
     return ok({"total": total, "page": page, "size": size,
                "items": [{"id": o.id, "goods_id": o.goods_id, "goods_name": o.goods_name,
+                          "goods_image": goods_map.get(o.goods_id).image if goods_map.get(o.goods_id) else None,
                           "points_cost": o.points_cost, "status": o.status,
                           "created_at": o.created_at.isoformat()} for o in items]})
 

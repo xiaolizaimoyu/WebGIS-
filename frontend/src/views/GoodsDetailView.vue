@@ -18,7 +18,7 @@ const goods = ref(null)
 const quantity = ref(1)
 
 const userPoints = computed(() => store.signStatus?.totalPoints || 0)
-const totalPoints = computed(() => (goods.value?.points || 0) * quantity.value)
+const totalPoints = computed(() => ((goods.value?.points ?? goods.value?.points_price) || 0) * quantity.value)
 const canAfford = computed(() => userPoints.value >= totalPoints.value)
 const hasStock = computed(() => (goods.value?.stock || 0) >= quantity.value)
 
@@ -116,6 +116,16 @@ async function submitRedeem() {
   }
 }
 
+// 外链图片加载失败（如 Unsplash 被墙/慢）时回退到本地 emoji 占位，避免裂图
+function onImgError(e) {
+  e.target.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>" +
+    "<rect width='100' height='100' fill='%23f0f2f5'/>" +
+    "<text x='50' y='62' font-size='40' text-anchor='middle'>🎁</text></svg>"
+  )
+  e.target.onerror = null
+}
+
 const tagColorMap = {
   '热门': 'danger',
   '新品': 'success',
@@ -137,7 +147,7 @@ onMounted(() => {
         <!-- 左侧商品图 -->
         <div class="goods-image-section">
           <div class="goods-image-large">
-            <img :src="goods.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80'" :alt="goods.name" class="goods-detail-cover" />
+            <img :src="goods.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80'" :alt="goods.name" class="goods-detail-cover" @error="onImgError" />
           </div>
           <div v-if="goods.tags && goods.tags.length" class="goods-tags-large">
             <el-tag
@@ -157,14 +167,14 @@ onMounted(() => {
 
           <div class="goods-category">
             <el-tag size="small">{{ goods.category }}</el-tag>
-            <span class="sold-count">已兑换 {{ goods.sold }} 件</span>
+            <span class="sold-count">已兑换 {{ goods.sold ?? 0 }} 件</span>
           </div>
 
           <div class="price-section">
             <div class="price-label">兑换价</div>
             <div class="price-value">
               <span class="price-icon">🪙</span>
-              <span class="price-num">{{ goods.points }}</span>
+              <span class="price-num">{{ goods.points ?? goods.points_price }}</span>
               <span class="price-unit">积分</span>
             </div>
             <div class="my-points">
