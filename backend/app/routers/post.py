@@ -96,7 +96,8 @@ def _get_optional_user(request: Request, session: Session = Depends(get_session)
     try:
         user_id = decode_token(auth.removeprefix("Bearer ").strip())
         return session.get(User, user_id)
-    except BizError:
+    except Exception:
+        # 任何异常（token 过期/畸形/DB 错误）都视为未登录，不中断浏览
         return None
 
 
