@@ -79,14 +79,18 @@ def _clean_text(value: str, field_name: str) -> str:
 
 
 def _get_optional_user(request: Request, session: Session) -> Optional[User]:
-    """从 Authorization 头尝试解析用户，未登录或 token 无效返回 None（不报错）。"""
+    """从 Authorization 头尝试解析用户，未登录或 token 无效返回 None（不报错）。
+
+    与 get_current_user 的区别：这里是"可选鉴权"——详情接口未登录也能看，
+    登录后额外返回 is_author。token 解析失败一律静默返回 None，绝不抛 500。
+    """
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return None
     try:
-        user_id = decode_token(auth.removeprefix("Bearer ").strip())
-        return session.get(User, user_id)
-    except BizError:
+        payload = decode_token(auth.removeprefix("Bearer ").strip())
+        return session.get(User, int(payload["sub"]))
+    except (BizError, KeyError, TypeError, ValueError):
         return None
 
 
