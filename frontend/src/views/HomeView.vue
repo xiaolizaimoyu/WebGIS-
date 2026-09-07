@@ -3,6 +3,7 @@
 // 左侧：前端 B 的业务信息流（保留原有逻辑）
 // 右侧：前端 A 的地图组件
 // 天气组件（前端 B）为全局右上角悬浮，已在 MainLayout 中挂载
+// 已加固：请求竞态保护（快速切换不串数据）、真实字段 longitude/latitude、mock 兜底归一化
 import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import * as postApi from '@/api/post'
@@ -16,7 +17,7 @@ const router = useRouter()
 const dialog = useDialogStore()
 const mapRef = ref(null)
 
-// 顶部 Tab：全部 + 六分类（value='all' 代表全部，请求时转 undefined）
+// 顶部 Tab：全部 + 分类（value='all' 代表全部，请求时转 undefined）
 const tabs = [
   { value: 'all', label: '全部' },
   ...Object.entries(TYPE_MAP).map(([value, item]) => ({ value, label: item.label }))
@@ -28,7 +29,20 @@ const page = ref(1)
 const size = ref(8)
 const loading = ref(false)
 
+// 请求序号：防止快速切换 tab/翻页时旧请求晚返回覆盖新结果
+let loadSeq = 0
+
+// 统一坐标字段：后端返回 longitude/latitude，兼容 mock 的 lng/lat
+function normalizeItem(item) {
+  return {
+    ...item,
+    longitude: item.longitude ?? item.lng ?? null,
+    latitude: item.latitude ?? item.lat ?? null
+  }
+}
+
 async function load() {
+  const seq = ++loadSeq
   loading.value = true
   try {
     const data = await postApi.listContents({
@@ -36,14 +50,16 @@ async function load() {
       page: page.value,
       size: size.value
     })
-    list.value = data.items
-    total.value = data.total
+    if (seq !== loadSeq) return // 已被更新的请求取代
+    list.value = (data.items || []).map(normalizeItem)
+    total.value = data.total || 0
   } catch (e) {
+    if (seq !== loadSeq) return
     // 后端未启动时使用模拟数据，确保前端可独立运行
-    list.value = getMockContents()
+    list.value = getMockContents().map(normalizeItem)
     total.value = list.value.length
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -102,8 +118,8 @@ function onMarkerClick(marker) {
 
 // 信息流卡片点击定位到地图
 function locateOnMap(item) {
-  if (item.lng && item.lat && mapRef.value) {
-    mapRef.value.setCenter(item.lng, item.lat, 15)
+  if (item.longitude && item.latitude && mapRef.value) {
+    mapRef.value.setCenter(item.longitude, item.latitude, 15)
   }
 }
 
@@ -141,7 +157,7 @@ onMounted(load)
               <span>{{ c.author_name }}</span>
               <span>发布于 {{ formatTime(c.created_at) }}</span>
             </div>
-            <div class="item-actions" v-if="c.lng && c.lat">
+            <div class="item-actions" v-if="c.longitude && c.latitude">
               <el-button text type="primary" size="small" @click.stop="locateOnMap(c)">
                 📍 在地图上查看
               </el-button>

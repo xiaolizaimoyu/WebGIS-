@@ -1,7 +1,7 @@
 <script setup>
 // 详情页（归属：前端 B）——内容详情 + 评论区
 // 未登录用户可浏览，发表评论会被引导到登录页
-// TODO(前端B)：点赞/收藏、回复楼中楼、评论时间轴美化等扩展点
+// 已加固：加载中显示骨架、接口失败显示错误+重试，不再出现空白页
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -18,13 +18,34 @@ const content = ref(null)
 const comments = ref([])
 const commentText = ref('')
 const sending = ref(false)
+const loading = ref(true)
+const loadFailed = ref(false)
 
 async function loadDetail() {
-  content.value = await postApi.getContent(contentId)
+  try {
+    content.value = await postApi.getContent(contentId)
+    loadFailed.value = false
+  } catch (e) {
+    // 接口失败：保留页面结构，展示错误与重试按钮，绝不静默空白
+    loadFailed.value = true
+    content.value = null
+  }
 }
 
 async function loadComments() {
-  comments.value = await postApi.listComments(contentId)
+  try {
+    comments.value = await postApi.listComments(contentId)
+  } catch (e) {
+    // 评论加载失败不阻塞页面，置空即可
+    comments.value = []
+  }
+}
+
+async function loadAll() {
+  loading.value = true
+  loadFailed.value = false
+  await Promise.all([loadDetail(), loadComments()])
+  loading.value = false
 }
 
 // 帖子带经纬度时展示「地图导航」入口（规划书 5-2：详情页导航按钮触发地图跳转定位）
@@ -55,79 +76,108 @@ async function sendComment() {
     commentText.value = ''
     ElMessage.success('评论成功')
     await loadComments()
+  } catch (e) {
+    // request.js 已弹错误提示
   } finally {
     sending.value = false
   }
 }
 
-onMounted(() => {
-  loadDetail()
-  loadComments()
-})
+onMounted(loadAll)
 </script>
 
 <template>
-  <div class="page-container" v-if="content">
-    <el-card shadow="never" class="detail-card">
-      <div class="head">
-        <el-tag :type="TYPE_MAP[content.type]?.tagType || 'info'" size="small">
-          {{ TYPE_MAP[content.type]?.label || content.type }}
-        </el-tag>
-        <span v-if="content.category" class="category">· {{ content.category }}</span>
-        <span class="meta">
-          {{ content.author_name }} 发布于 {{ formatTime(content.created_at) }}
-        </span>
-      </div>
+  <div class="page-container">
+    <!-- 加载中：骨架占位，避免白屏 -->
+    <div v-if="loading" v-loading="true" class="loading-wrap">
+      <el-skeleton :rows="6" animated style="max-width: 860px; margin: 0 auto" />
+    </div>
 
-      <h1 class="title">{{ content.title }}</h1>
-      <div class="body">{{ content.body }}</div>
+    <!-- 加载失败：错误提示 + 重试 -->
+    <div v-else-if="loadFailed || !content" class="error-wrap">
+      <el-result icon="warning" title="内容加载失败" sub-title="网络可能有波动，请点击重试">
+        <template #extra>
+          <el-button type="primary" @click="loadAll">重新加载</el-button>
+          <el-button @click="router.push('/')">返回首页</el-button>
+        </template>
+      </el-result>
+    </div>
 
-      <div v-if="content.images && content.images.length" class="gallery">
-        <el-image
-          v-for="(img, i) in content.images"
-          :key="i"
-          :src="img"
-          :preview-src-list="content.images"
-          :initial-index="i"
-          fit="contain"
-          preview-teleported
-          class="gallery-img"
-        />
-      </div>
-    </el-card>
-
-    <el-card shadow="never" class="comment-card">
-      <template #header>评论（{{ comments.length }}）</template>
-
-      <div class="comment-input">
-        <el-input
-          v-model="commentText"
-          type="textarea"
-          :rows="2"
-          maxlength="500"
-          placeholder="友善评论，理性交流……"
-        />
-        <div class="input-actions">
-          <el-button type="primary" :loading="sending" @click="sendComment">发表评论</el-button>
+    <!-- 正常内容 -->
+    <template v-else>
+      <el-card shadow="never" class="detail-card">
+        <div class="head">
+          <el-tag :type="TYPE_MAP[content.type]?.tagType || 'info'" size="small">
+            {{ TYPE_MAP[content.type]?.label || content.type }}
+          </el-tag>
+          <span v-if="content.category" class="category">· {{ content.category }}</span>
+          <span class="meta">
+            {{ content.author_name }} 发布于 {{ formatTime(content.created_at) }}
+          </span>
         </div>
-      </div>
 
-      <el-empty v-if="!comments.length" description="还没有评论，来抢沙发～" :image-size="80" />
-      <div v-for="c in comments" :key="c.id" class="comment-item">
-        <div class="avatar">{{ c.author_name.slice(0, 1) }}</div>
-        <div class="comment-main">
-          <div class="who">
-            <span class="nick">{{ c.author_name }}</span>
-            <span class="time">{{ formatTime(c.created_at) }}</span>
+        <h1 class="title">{{ content.title }}</h1>
+        <div class="body">{{ content.body }}</div>
+
+        <div v-if="content.images && content.images.length" class="gallery">
+          <el-image
+            v-for="(img, i) in content.images"
+            :key="i"
+            :src="img"
+            :preview-src-list="content.images"
+            :initial-index="i"
+            fit="contain"
+            preview-teleported
+            class="gallery-img"
+          />
+        </div>
+      </el-card>
+
+      <el-card shadow="never" class="comment-card">
+        <template #header>评论（{{ comments.length }}）</template>
+
+        <div class="comment-input">
+          <el-input
+            v-model="commentText"
+            type="textarea"
+            :rows="2"
+            maxlength="500"
+            placeholder="友善评论，理性交流……"
+          />
+          <div class="input-actions">
+            <el-button type="primary" :loading="sending" @click="sendComment">发表评论</el-button>
           </div>
-          <div class="text">{{ c.body }}</div>
         </div>
-      </div>
-    </el-card>
+
+        <el-empty v-if="!comments.length" description="还没有评论，来抢沙发～" :image-size="80" />
+        <div v-for="c in comments" :key="c.id" class="comment-item">
+          <div class="avatar">{{ c.author_name.slice(0, 1) }}</div>
+          <div class="comment-main">
+            <div class="who">
+              <span class="nick">{{ c.author_name }}</span>
+              <span class="time">{{ formatTime(c.created_at) }}</span>
+            </div>
+            <div class="text">{{ c.body }}</div>
+          </div>
+        </div>
+      </el-card>
+    </template>
   </div>
 </template>
 
 <style scoped>
+.loading-wrap {
+  min-height: 300px;
+  padding: 40px 20px;
+}
+
+.error-wrap {
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .detail-card {
   border-radius: 10px;
   margin-bottom: 16px;
