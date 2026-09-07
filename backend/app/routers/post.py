@@ -206,6 +206,7 @@ def list_contents(
     size: int = Query(default=10, ge=1, le=100),
     has_location: bool = Query(default=False, description="WebGIS：仅返回绑定了经纬度的内容（地图点位用）"),
     author_id: Optional[int] = Query(default=None, description="按作者 id 筛选，不传为全部"),
+    category: Optional[str] = Query(default=None, max_length=20, description="按二级子分类筛选，如 食堂推荐"),
     session: Session = Depends(get_session),
 ):
     _validate_optional_type(type)
@@ -215,6 +216,8 @@ def list_contents(
     filters = [Content.type == type] if type else []
     if author_id is not None:
         filters.append(Content.author_id == author_id)
+    if category:
+        filters.append(Content.category == category)
     keyword = (keyword or "").strip()
     if keyword:
         filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
