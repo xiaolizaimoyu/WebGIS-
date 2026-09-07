@@ -48,6 +48,10 @@ SUMMARY_LENGTH = 100
 MAX_KEYWORD_LENGTH = 50
 MAX_CATEGORY_LENGTH = 20
 
+# 上传提示文案：从 config 常量推导，避免硬编码与配置脱节
+_IMAGE_SIZE_MB = MAX_IMAGE_SIZE // (1024 * 1024)
+_IMAGE_EXT_HINT = " / ".join(sorted(ext.lstrip(".") for ext in ALLOWED_IMAGE_EXTENSIONS))
+
 
 def _normalize_category(content_type: str, category: Optional[str]) -> Optional[str]:
     """子分类规整与校验：去空白；无子分类的类型清空；有白名单的类型校验合法性。"""
@@ -290,14 +294,14 @@ async def upload_image(
 ):
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
-        raise BizError(400, "仅支持 jpg / jpeg / png / gif 格式图片")
+        raise BizError(400, f"仅支持 {_IMAGE_EXT_HINT} 格式图片")
     # 先用 file.size 预检，避免读取超大文件浪费内存
     if file.size is not None and file.size > MAX_IMAGE_SIZE:
-        raise BizError(400, "图片不能超过 5MB")
+        raise BizError(400, f"图片不能超过 {_IMAGE_SIZE_MB}MB")
     data = await file.read()
     await file.close()
     if len(data) > MAX_IMAGE_SIZE:
-        raise BizError(400, "图片不能超过 5MB")
+        raise BizError(400, f"图片不能超过 {_IMAGE_SIZE_MB}MB")
 
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     filename = f"{uuid.uuid4().hex}{ext}"
