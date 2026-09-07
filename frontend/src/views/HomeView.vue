@@ -59,6 +59,20 @@ function firstImage(item) {
   return item.images && item.images.length ? item.images[0] : ''
 }
 
+function summaryText(item) {
+  return item.body && item.body.trim() ? item.body.trim() : '暂无内容简介'
+}
+
+function onImageError(event) {
+  event.target.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 80'>" +
+    "<rect width='120' height='80' fill='%23eef3ff'/>" +
+    "<text x='60' y='48' font-size='28' text-anchor='middle'>📷</text>" +
+    "</svg>"
+  )
+  event.target.onerror = null
+}
+
 // ====== 右侧地图（前端 A 组件整合） ======
 const mapCenter = ref([116.397428, 39.90923])
 const mapZoom = ref(12)
@@ -135,7 +149,7 @@ onMounted(load)
               <span v-if="c.category" class="category">· {{ c.category }}</span>
             </div>
             <h3 class="title">{{ c.title }}</h3>
-            <p class="summary">{{ c.body }}</p>
+            <p class="summary">{{ summaryText(c) }}</p>
             <div class="meta">
               <span>{{ c.author_name }}</span>
               <span>发布于 {{ formatTime(c.created_at) }}</span>
@@ -146,7 +160,7 @@ onMounted(load)
               </el-button>
             </div>
           </div>
-          <el-image v-if="firstImage(c)" :src="firstImage(c)" fit="cover" class="thumb" />
+          <el-image v-if="firstImage(c)" :src="firstImage(c)" fit="cover" class="thumb" @error="onImageError" />
         </el-card>
 
         <el-empty v-if="!loading && !list.length" description="这里还空空如也，来发布第一条内容吧" />
