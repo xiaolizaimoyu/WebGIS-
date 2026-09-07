@@ -218,6 +218,9 @@ async def upload_image(
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_IMAGE_EXTENSIONS:
         raise BizError(400, "仅支持 jpg / jpeg / png / gif 格式图片")
+    # 先用 file.size 预检，避免读取超大文件浪费内存
+    if file.size is not None and file.size > MAX_IMAGE_SIZE:
+        raise BizError(400, "图片不能超过 5MB")
     data = await file.read()
     await file.close()
     if len(data) > MAX_IMAGE_SIZE:
