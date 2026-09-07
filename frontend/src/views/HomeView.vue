@@ -81,10 +81,16 @@ function onImageError(event) {
 const mapCenter = ref([116.397428, 39.90923])
 const mapZoom = ref(12)
 
+function coordinate(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
 // 从内容列表提取地图标记点（带坐标的内容）
 const mapMarkers = computed(() =>
   list.value
-    .filter((c) => c.lng && c.lat)
+    .map((c) => ({ ...c, lng: coordinate(c.lng), lat: coordinate(c.lat) }))
+    .filter((c) => c.lng !== null && c.lat !== null)
     .map((c) => ({
       id: c.id,
       lng: c.lng,
