@@ -76,6 +76,13 @@ def _validate_optional_type(content_type: Optional[str]) -> None:
         raise BizError(2002, f"分类 type 不合法，仅支持：{' / '.join(sorted(VALID_TYPES))}")
 
 
+def _add_keyword_filter(filters: list, keyword: Optional[str]) -> None:
+    """关键词搜索：去空白后匹配标题或正文，list_contents 与 list_my_contents 共用。"""
+    keyword = (keyword or "").strip()
+    if keyword:
+        filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
+
+
 def _clean_text(value: str, field_name: str) -> str:
     """去首尾空白、拒绝纯空白、转义 HTML 特殊字符（防存储型 XSS）。标题 / 正文 / 评论共用。"""
     value = value.strip()
@@ -174,6 +181,8 @@ def _query_contents_page(
     - sort=latest：普通查询 + 批量统计评论数。
     list_contents 与 list_my_contents 共用，避免分页/排序/计数逻辑重复。
     """
+    if sort not in SORT_OPTIONS:
+        sort = "latest"  # 防御性兜底，调用方已校验，这里保证函数本身健壮
     total = session.exec(select(func.count(Content.id)).where(*filters)).one()
     if sort == "hot":
         count_sub = (
@@ -275,9 +284,7 @@ def list_contents(
         filters.append(Content.category == category)
     if min_view_count is not None:
         filters.append(Content.view_count >= min_view_count)
-    keyword = (keyword or "").strip()
-    if keyword:
-        filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
+    _add_keyword_filter(filters, keyword)
     if has_location:
         # 地图只渲染拾取过地理位置的帖子，经纬度必然成对（创建时已校验），用一个条件即可
         filters.append(Content.latitude.is_not(None))
@@ -319,9 +326,7 @@ def list_my_contents(
     filters = [Content.author_id == user.id]
     if type:
         filters.append(Content.type == type)
-    keyword = (keyword or "").strip()
-    if keyword:
-        filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
+    _add_keyword_filter(filters, keyword)
     items, count_map, total = _query_contents_page(session, filters, sort, page, size)
     return ok({
         "total": total,
@@ -410,13 +415,15 @@ def get_content(
     content = session.get(Content, content_id)
     if content is None:
         raise BizError(2001, "内容不存在或已被删除")
-    # 浏览量自增（直接 SQL 更新避免 ORM 乐观锁冲突）
+    # 浏览量自增（直接 SQL 更新保证原子性，避免 ORM 乐观锁冲突）。
+    # commit 后对象会过期，直接在内存设置已知新值，省一次 refresh 查询。
+    current_view = content.view_count or 0
     session.execute(
         text("UPDATE contents SET view_count = view_count + 1 WHERE id = :cid"),
         {"cid": content_id},
     )
     session.commit()
-    session.refresh(content)
+    content.view_count = current_view + 1
     author = session.get(User, content.author_id)
     comment_count = session.exec(
         select(func.count(Comment.id)).where(Comment.content_id == content.id)
@@ -436,10 +443,10 @@ def list_comments(
     session: Session = Depends(get_session),
     current_user: Optional[User] = Depends(_get_optional_user),
 ):
-    if order not in COMMENT_ORDER_OPTIONS:
-        raise BizError(400, f"排序参数 order 仅支持：{' | '.join(COMMENT_ORDER_OPTIONS)}")
     if session.get(Content, content_id) is None:
         raise BizError(2001, "内容不存在或已被删除")
+    if order not in COMMENT_ORDER_OPTIONS:
+        raise BizError(400, f"排序参数 order 仅支持：{' | '.join(COMMENT_ORDER_OPTIONS)}")
     total = session.exec(
         select(func.count(Comment.id)).where(Comment.content_id == content_id)
     ).one()
