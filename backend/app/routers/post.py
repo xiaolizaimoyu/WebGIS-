@@ -31,11 +31,16 @@ VALID_TYPES = {"activity", "meeting", "news", "ad", "food", "lost"}
 # 各一级分类允许的二级子分类（category）。
 # - 表中没有的类型（activity/meeting/news）不支持子分类，提交时统一清空；
 # - 表中的类型 category 可空；非空时必须命中白名单，保证地图/列表筛选数据规范。
+# 值用 set 是为了 O(1) 成员判断；错误提示时再排序输出。
 CATEGORY_RULES = {
-    "ad": ["闲置", "求助", "宣传"],
-    "food": ["食堂推荐", "小吃外卖", "零食饮品"],
-    "lost": ["寻物启事", "失主招领"],
+    "ad": {"闲置", "求助", "宣传"},
+    "food": {"食堂推荐", "小吃外卖", "零食饮品"},
+    "lost": {"寻物启事", "失主招领"},
 }
+
+# 列表排序与评论排序的合法取值（模块常量，避免散落的魔法字符串）
+SORT_OPTIONS = ("latest", "hot")
+COMMENT_ORDER_OPTIONS = ("asc", "desc")
 
 
 def _normalize_category(content_type: str, category: Optional[str]) -> Optional[str]:
@@ -47,7 +52,7 @@ def _normalize_category(content_type: str, category: Optional[str]) -> Optional[
     if not category:
         return None
     if category not in allowed:
-        raise BizError(2004, f"子分类 category 不合法，{content_type} 仅支持：{' / '.join(allowed)}")
+        raise BizError(2004, f"子分类 category 不合法，{content_type} 仅支持：{' / '.join(sorted(allowed))}")
     return category
 
 
@@ -215,8 +220,8 @@ def list_contents(
     session: Session = Depends(get_session),
 ):
     _validate_optional_type(type)
-    if sort not in ("latest", "hot"):
-        raise BizError(400, "排序参数 sort 仅支持：latest | hot")
+    if sort not in SORT_OPTIONS:
+        raise BizError(400, f"排序参数 sort 仅支持：{' | '.join(SORT_OPTIONS)}")
 
     filters = [Content.type == type] if type else []
     if author_id is not None:
@@ -278,6 +283,7 @@ def list_contents(
 @router.get("/contents/mine", summary="我的发布列表（需登录）")
 def list_my_contents(
     type: Optional[str] = Query(default=None, description="按 type 筛选，不传为全部"),
+    keyword: Optional[str] = Query(default=None, max_length=50, description="关键词搜索：匹配标题或正文，不传为不搜索"),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, ge=1, le=50),
     session: Session = Depends(get_session),
@@ -293,6 +299,9 @@ def list_my_contents(
     filters = [Content.author_id == user.id]
     if type:
         filters.append(Content.type == type)
+    keyword = (keyword or "").strip()
+    if keyword:
+        filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
     total = session.exec(
         select(func.count(Content.id)).where(*filters)
     ).one()
@@ -418,8 +427,8 @@ def list_comments(
     session: Session = Depends(get_session),
     current_user: Optional[User] = Depends(_get_optional_user),
 ):
-    if order not in ("asc", "desc"):
-        raise BizError(400, "排序参数 order 仅支持：asc | desc")
+    if order not in COMMENT_ORDER_OPTIONS:
+        raise BizError(400, f"排序参数 order 仅支持：{' | '.join(COMMENT_ORDER_OPTIONS)}")
     if session.get(Content, content_id) is None:
         raise BizError(2001, "内容不存在或已被删除")
     total = session.exec(
