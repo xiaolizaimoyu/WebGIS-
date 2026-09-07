@@ -144,6 +144,20 @@ def _clean_text(value: str, field_name: str) -> str:
     return html.escape(value)
 
 
+def _apply_content_fields(content: Content, data: ContentIn) -> Content:
+    """把请求体的合法字段写入 content（就地修改并返回），创建与编辑共用。"""
+    _validate_optional_type(data.type)
+    longitude, latitude = _normalize_location(data.longitude, data.latitude)
+    content.title = _clean_text(data.title, "标题")
+    content.body = _clean_text(data.body, "正文")
+    content.type = data.type
+    content.category = _normalize_category(data.type, data.category)
+    content.images = data.images
+    content.longitude = longitude
+    content.latitude = latitude
+    return content
+
+
 def _get_optional_user(request: Request, session: Session = Depends(get_session)) -> Optional[User]:
     """FastAPI 依赖：从 Authorization 头尝试解析用户，未登录或 token 无效返回 None（不报错）。"""
     auth = request.headers.get("Authorization", "")
@@ -298,19 +312,8 @@ def create_content(
     session: Session = Depends(get_session),
     user: User = Depends(get_current_user),
 ):
-    _validate_optional_type(data.type)
-    longitude, latitude = _normalize_location(data.longitude, data.latitude)
-    category = _normalize_category(data.type, data.category)
-    content = Content(
-        title=_clean_text(data.title, "标题"),
-        body=_clean_text(data.body, "正文"),
-        type=data.type,
-        category=category,
-        images=data.images,
-        longitude=longitude,
-        latitude=latitude,
-        author_id=user.id,
-    )
+    content = Content(author_id=user.id)
+    _apply_content_fields(content, data)
     session.add(content)
     session.commit()
     session.refresh(content)
@@ -441,15 +444,7 @@ def update_content(
     content = _require_content(session, content_id)
     if content.author_id != user.id:
         raise BizError(2003, "只能编辑自己发布的内容")
-    _validate_optional_type(data.type)
-    longitude, latitude = _normalize_location(data.longitude, data.latitude)
-    content.title = _clean_text(data.title, "标题")
-    content.body = _clean_text(data.body, "正文")
-    content.type = data.type
-    content.category = _normalize_category(data.type, data.category)
-    content.images = data.images
-    content.longitude = longitude
-    content.latitude = latitude
+    _apply_content_fields(content, data)
     session.add(content)
     session.commit()
     session.refresh(content)
