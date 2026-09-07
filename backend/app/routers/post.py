@@ -41,6 +41,8 @@ CATEGORY_RULES = {
 # 列表排序与评论排序的合法取值（模块常量，避免散落的魔法字符串）
 SORT_OPTIONS = ("latest", "hot")
 COMMENT_ORDER_OPTIONS = ("asc", "desc")
+# 列表卡片摘要长度（正文截取前 N 字 + "..."）
+SUMMARY_LENGTH = 100
 
 
 def _normalize_category(content_type: str, category: Optional[str]) -> Optional[str]:
@@ -101,8 +103,8 @@ def _get_optional_user(request: Request, session: Session = Depends(get_session)
 # ---------- 序列化辅助 ----------
 def content_to_dict(content: Content, author_name: str, comment_count: int = 0, is_author: Optional[bool] = None) -> dict:
     body = content.body or ""
-    # 摘要：正文前 100 字，列表卡片展示用，正文原样保留在 body 字段
-    summary = body[:100] + ("..." if len(body) > 100 else "")
+    # 摘要：正文前 SUMMARY_LENGTH 字，列表卡片展示用，正文原样保留在 body 字段
+    summary = body[:SUMMARY_LENGTH] + ("..." if len(body) > SUMMARY_LENGTH else "")
     d = {
         "id": content.id,
         "title": content.title,
