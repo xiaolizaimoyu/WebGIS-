@@ -274,6 +274,13 @@ onMounted(() => {
   color: #1d6df0;
 }
 
+.nav-item:focus-visible,
+.user-name:focus-visible,
+.notify-bell:focus-visible {
+  outline: 2px solid #1d6df0;
+  outline-offset: 2px;
+}
+
 .nav-item.active {
   background: linear-gradient(135deg, #1d6df0, #4facfe);
   color: #fff;
@@ -498,6 +505,10 @@ onMounted(() => {
   padding: 0;
   background: linear-gradient(180deg, #f5f7fa 0%, #eef1f6 100%);
   min-height: calc(100vh - 64px);
+}
+
+.header-inner > .user-name {
+  min-width: 0;
 }
 
 /* 响应式 */
