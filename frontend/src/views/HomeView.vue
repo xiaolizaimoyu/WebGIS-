@@ -4,8 +4,8 @@
 // 右侧：前端 A 的地图组件
 // 天气组件（前端 B）为全局右上角悬浮，已在 MainLayout 中挂载
 // 已加固：请求竞态保护（快速切换不串数据）、真实字段 longitude/latitude、mock 兜底归一化
-import { onMounted, ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import * as postApi from '@/api/post'
 import { formatTime } from '@/api/const'
 import { TYPE_MAP } from '@/api/typeMap' // B 扩展版：含美食分享 / 失物招领
@@ -13,6 +13,7 @@ import { getMockContents } from '@/utils/mockData'
 import { useDialogStore } from '@/stores/dialog'
 import MapComponent from '@/components/MapComponent.vue'
 
+const route = useRoute()
 const router = useRouter()
 const dialog = useDialogStore()
 const mapRef = ref(null)
@@ -22,7 +23,11 @@ const tabs = [
   { value: 'all', label: '全部' },
   ...Object.entries(TYPE_MAP).map(([value, item]) => ({ value, label: item.label }))
 ]
-const activeType = ref('all')
+
+// 分类状态与 URL 同步（?type=meeting）：进入页面时从 query 恢复，
+// 切换 tab 时写入 query，保证从详情页返回时分类正确且数据刷新
+const queryType = String(route.query.type || 'all')
+const activeType = ref(TYPE_MAP[queryType] ? queryType : 'all')
 const list = ref([])
 const total = ref(0)
 const page = ref(1)
@@ -65,8 +70,44 @@ async function load() {
 
 function onTabChange() {
   page.value = 1
+  syncTypeToUrl()
   load()
 }
+
+// 把当前分类写入 URL query（'all' 时移除，保持 URL 干净）
+function syncTypeToUrl() {
+  const q = { ...route.query }
+  if (activeType.value === 'all') delete q.type
+  else q.type = activeType.value
+  router.replace({ query: q })
+}
+
+// 浏览器前进/后退改变 query.type 时，同步 tab 并重新加载
+watch(
+  () => route.query.type,
+  (t) => {
+    const next = t ? String(t) : 'all'
+    if (TYPE_MAP[next] && activeType.value !== next) {
+      activeType.value = next
+      page.value = 1
+      load()
+    }
+  }
+)
+
+// 浏览器 bfcache 后退恢复页面快照时不触发 onMounted，这里强制刷新
+function onPageShow(e) {
+  if (e.persisted) load()
+}
+
+onMounted(() => {
+  load()
+  window.addEventListener('pageshow', onPageShow)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('pageshow', onPageShow)
+})
 
 function toDetail(id) {
   router.push(`/content/${id}`)
@@ -123,7 +164,6 @@ function locateOnMap(item) {
   }
 }
 
-onMounted(load)
 </script>
 
 <template>
