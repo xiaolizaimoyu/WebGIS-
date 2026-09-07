@@ -168,7 +168,7 @@ async def upload_image(
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     filename = f"{uuid.uuid4().hex}{ext}"
     (UPLOAD_DIR / filename).write_bytes(data)
-    return ok({"url": f"/uploads/{filename}"})
+    return ok({"url": f"/uploads/{filename}", "size": len(data)})
 
 
 # ---------- 内容 ----------
