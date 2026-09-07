@@ -34,7 +34,11 @@ const redeeming = ref(false)
 
 async function loadDetail() {
   try {
-    goods.value = await mallApi.getGoods(goodsId)
+    const data = await mallApi.getGoods(goodsId)
+    // 后端字段优先，mock 展示增强字段（产品亮点/规格/渐变背景）兜底，
+    // 保证详情页视觉增强在连接真实后端时同样生效
+    const rich = getMockGoodsDetail(goodsId) || {}
+    goods.value = { ...rich, ...data }
   } catch {
     goods.value = getMockGoodsDetail(goodsId)
   }
