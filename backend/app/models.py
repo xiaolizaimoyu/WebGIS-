@@ -1,6 +1,6 @@
 """数据表模型（归属：后端 F，全项目唯一建表来源）
 
-共 12 张表：
+共 13 张表：
 - users          用户（含积分）
 - contents       内容（会议/动态/美食/失物，type 区分）
 - comments       评论
@@ -12,7 +12,8 @@
 - mall_goods     积分商城商品
 - orders         兑换订单
 - follows        关注（用户-用户）
-- carpools       组队拼车（发布/编辑/删除/申请）
+- carpools       组队拼车（发布/编辑/删除）
+- carpool_applications  拼车申请（待确认/同意/拒绝/取消）
 
 改动表结构请统一在此修改，并由 db.create_db_and_tables() 自动建表/补列。
 """
@@ -212,4 +213,23 @@ class Carpool(SQLModel, table=True):
     author_id: int = Field(foreign_key="users.id", index=True, description="发布者用户 ID")
     author_name: str = Field(max_length=30, description="发布者昵称快照")
     status: str = Field(default="recruiting", description="recruiting 招募中 / full 已满员 / closed 已关闭")
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
+# ==================== 拼车申请 ====================
+
+class CarpoolApplication(SQLModel, table=True):
+    """拼车申请表：提交申请后待车主确认，确认才扣减座位（第 13 张表，归属：后端 C）"""
+
+    __tablename__ = "carpool_applications"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    carpool_id: int = Field(foreign_key="carpools.id", index=True, description="拼车 ID")
+    applicant_id: int = Field(foreign_key="users.id", index=True, description="申请人用户 ID")
+    applicant_name: str = Field(max_length=30, description="申请人姓名")
+    phone: str = Field(max_length=20, description="申请人联系电话")
+    people_count: int = Field(default=1, description="申请人数")
+    remark: str = Field(default="", max_length=300, description="申请备注")
+    status: str = Field(default="pending", index=True,
+                        description="pending 待确认 / approved 已同意 / rejected 已拒绝 / cancelled 已取消")
     created_at: datetime = Field(default_factory=datetime.now)

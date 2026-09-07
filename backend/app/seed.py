@@ -28,7 +28,7 @@ from sqlmodel import Session, select
 from app.core.config import UPLOAD_DIR
 from app.core.security import hash_password
 from app.db import engine
-from app.models import (Carpool, Comment, Content, Favorite, Follow, Like, MallGoods,
+from app.models import (Carpool, CarpoolApplication, Comment, Content, Favorite, Follow, Like, MallGoods,
                         Notification, Order, PointsLog, SignRecord, User)
 
 # ---------------- 配置 ----------------
@@ -199,10 +199,25 @@ def run(reset: bool = False) -> None:
                 session.delete(f)
             comments = session.exec(select(Comment).where(Comment.author_id.in_(demo_ids))).all()
             contents = session.exec(select(Content).where(Content.author_id.in_(demo_ids))).all()
+            carpools = session.exec(select(Carpool).where(Carpool.author_id.in_(demo_ids))).all()
             for c in comments:
                 session.delete(c)
             for ct in contents:
                 session.delete(ct)
+            for cp in carpools:
+                # 先删该拼车下的申请记录（外键依赖）
+                apps = session.exec(
+                    select(CarpoolApplication).where(CarpoolApplication.carpool_id == cp.id)
+                ).all()
+                for a in apps:
+                    session.delete(a)
+                session.delete(cp)
+            # 演示用户提交过的拼车申请（申请他人拼车）
+            apps_by_demo = session.exec(
+                select(CarpoolApplication).where(CarpoolApplication.applicant_id.in_(demo_ids))
+            ).all()
+            for a in apps_by_demo:
+                session.delete(a)
             for u in demo_users:
                 session.delete(u)
         old_goods = session.exec(select(MallGoods).where(MallGoods.name.like("演示%"))).all()
