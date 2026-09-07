@@ -93,8 +93,8 @@ def _get_optional_user(request: Request, session: Session = Depends(get_session)
 
 # ---------- 序列化辅助 ----------
 def content_to_dict(content: Content, author_name: str, comment_count: int = 0, is_author: Optional[bool] = None) -> dict:
-    # 摘要：正文前 100 字，列表卡片展示用，正文原样保留在 body 字段
     body = content.body or ""
+    # 摘要：正文前 100 字，列表卡片展示用，正文原样保留在 body 字段
     summary = body[:100] + ("..." if len(body) > 100 else "")
     d = {
         "id": content.id,
@@ -198,7 +198,7 @@ def create_content(
     session.add(content)
     session.commit()
     session.refresh(content)
-    return ok(content_to_dict(content, user.nickname), "发布成功")
+    return ok(content_to_dict(content, user.nickname, is_author=True), "发布成功")
 
 
 @router.get("/contents", summary="内容列表（首页信息流 / 地图点位 / 搜索）")
@@ -319,10 +319,9 @@ def content_stats(session: Session = Depends(get_session)):
         select(Content.type, func.count(Content.id)).group_by(Content.type)
     ).all()
     by_type = {t: 0 for t in sorted(VALID_TYPES)}
-    total = 0
     for t, c in rows:
         by_type[t] = c
-        total += c
+    total = sum(by_type.values())
     comment_total = session.exec(select(func.count(Comment.id))).one()
     return ok({"total": total, "comment_total": comment_total, "by_type": by_type})
 
@@ -351,7 +350,7 @@ def update_content(
     session.add(content)
     session.commit()
     session.refresh(content)
-    return ok(content_to_dict(content, user.nickname), "修改成功")
+    return ok(content_to_dict(content, user.nickname, is_author=True), "修改成功")
 
 
 @router.delete("/contents/{content_id}", summary="删除自己发布的内容（需登录）")
@@ -437,7 +436,6 @@ def list_comments(
     ).all()
     name_map = users_nickname_map(session, [c.author_id for c in rows])
     # 可选鉴权：已登录时每条评论附带 is_author，前端据此显示删除按钮
-    current_uid = current_user.id if current_user is not None else None
     return ok({
         "total": total,
         "total_pages": (total + size - 1) // size,
@@ -445,7 +443,7 @@ def list_comments(
             comment_to_dict(
                 c,
                 name_map.get(c.author_id, "未知用户"),
-                (c.author_id == current_uid) if current_uid is not None else None,
+                c.author_id == current_user.id if current_user is not None else None,
             )
             for c in rows
         ],
@@ -465,7 +463,7 @@ def create_comment(
     session.add(comment)
     session.commit()
     session.refresh(comment)
-    return ok(comment_to_dict(comment, user.nickname), "评论成功")
+    return ok(comment_to_dict(comment, user.nickname, is_author=True), "评论成功")
 
 
 @router.delete("/contents/{content_id}/comments/{comment_id}", summary="删除评论（需登录）")
