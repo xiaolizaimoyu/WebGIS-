@@ -107,6 +107,7 @@ Query：`type`（可选，不传=全部，非法值返回 2002）、`page`、`si
 **GET /api/contents/{id}/comments** — 评论列表（分页）
 Query：`page`（默认1）、`size`（默认20，最大100）
 成功 data：`{ "total": N, "total_pages": M, "items": [评论对象] }`（按时间正序）。
+已登录用户访问时每条评论额外返回 `is_author: true/false`，前端据此显示删除按钮；未登录时该字段不出现。
 
 **POST /api/contents/{id}/comments** — 发表评论（鉴权）
 请求体：`{ "body": "评论内容" }`
@@ -116,6 +117,8 @@ Query：`page`（默认1）、`size`（默认20，最大100）
 **DELETE /api/contents/{id}/comments/{comment_id}** — 删除评论（鉴权，仅作者本人）
 成功 data：`{ "id": comment_id, "deleted": true }`。
 失败：非本人评论返回 `code: 2003`；评论/内容不存在返回 `code: 2001`。
+
+> 内容发布/编辑请求体中 `images` 数组最多 9 张（Pydantic 校验）。
 
 ## 内容对象结构
 
