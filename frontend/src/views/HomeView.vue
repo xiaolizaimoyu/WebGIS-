@@ -33,6 +33,7 @@ const total = ref(0)
 const page = ref(1)
 const size = ref(8)
 const loading = ref(false)
+let requestId = 0
 
 // 请求序号：防止快速切换 tab/翻页时旧请求晚返回覆盖新结果
 let loadSeq = 0
@@ -76,8 +77,9 @@ async function load() {
       size: size.value
     })
     if (seq !== loadSeq) return // 已被更新的请求取代
-    list.value = (data.items || []).map(normalizeItem)
-    total.value = data.total || 0
+    const items = Array.isArray(data) ? data : (data.items || [])
+    list.value = items.map(normalizeItem)
+    total.value = data.total ?? list.value.length
     // 仅缓存第一页（翻页不覆盖缓存），按分类记录
     if (page.value === 1) {
       cachedList = list.value
@@ -145,9 +147,28 @@ function firstImage(item) {
   return item.images && item.images.length ? item.images[0] : ''
 }
 
+function summaryText(item) {
+  return item.body && item.body.trim() ? item.body.trim() : '暂无内容简介'
+}
+
+function onImageError(event) {
+  event.target.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 80'>" +
+    "<rect width='120' height='80' fill='%23eef3ff'/>" +
+    "<text x='60' y='48' font-size='28' text-anchor='middle'>📷</text>" +
+    "</svg>"
+  )
+  event.target.onerror = null
+}
+
 // ====== 右侧地图（前端 A 组件整合） ======
 const mapCenter = ref([116.397428, 39.90923])
 const mapZoom = ref(12)
+
+function coordinate(value) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
 
 // 从内容列表提取地图标记点（带坐标的内容）
 const mapMarkers = computed(() =>
@@ -160,6 +181,14 @@ const mapMarkers = computed(() =>
       title: c.title
     }))
 )
+
+const hasMapData = computed(() => mapMarkers.value.length > 0)
+
+function resetMapView() {
+  if (mapRef.value && typeof mapRef.value.fitToMarkers === 'function') {
+    mapRef.value.fitToMarkers()
+  }
+}
 
 // 地图加载完成回调
 function onMapReady(olMap) {
@@ -220,7 +249,7 @@ function locateOnMap(item) {
               <span v-if="c.category" class="category">· {{ c.category }}</span>
             </div>
             <h3 class="title">{{ c.title }}</h3>
-            <p class="summary">{{ c.body }}</p>
+            <p class="summary">{{ summaryText(c) }}</p>
             <div class="meta">
               <span>{{ c.author_name }}</span>
               <span>发布于 {{ formatTime(c.created_at) }}</span>
@@ -231,10 +260,10 @@ function locateOnMap(item) {
               </el-button>
             </div>
           </div>
-          <el-image v-if="firstImage(c)" :src="firstImage(c)" fit="cover" class="thumb" />
+          <el-image v-if="firstImage(c)" :src="firstImage(c)" fit="cover" lazy class="thumb" @error="onImageError" />
         </el-card>
 
-        <el-empty v-if="!loading && !list.length" description="这里还空空如也，来发布第一条内容吧" />
+        <el-empty v-if="!loading && !list.length" description="这里还空空如也，来发布第一条内容吧" aria-live="polite" />
       </div>
 
       <div v-if="total > size" class="pager">
@@ -254,11 +283,15 @@ function locateOnMap(item) {
       <div class="map-wrapper">
         <div class="map-header">
           <span class="map-title">🗺️ 活动分布地图</span>
-          <el-button text size="small" @click="mapRef?.fitToMarkers()">
+          <el-button text size="small" @click="resetMapView">
             重置视野
           </el-button>
         </div>
+        <div v-if="!hasMapData" class="map-empty">
+          暂无活动点位，先发布一条内容即可展示在地图上。
+        </div>
         <MapComponent
+          v-else
           ref="mapRef"
           :center="mapCenter"
           :zoom="mapZoom"
@@ -314,6 +347,11 @@ function locateOnMap(item) {
   margin-bottom: 14px;
   border-radius: 10px;
   cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.item-card:hover {
+  transform: translateY(-2px);
 }
 
 .item-card :deep(.el-card__body) {
@@ -387,6 +425,19 @@ function locateOnMap(item) {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
+.map-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 360px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f5f7ff, #eef4ff);
+  color: #7a879d;
+  font-size: 13px;
+  text-align: center;
+  padding: 16px;
+}
+
 .map-header {
   display: flex;
   justify-content: space-between;
@@ -405,6 +456,7 @@ function locateOnMap(item) {
   color: #909399;
   margin-top: 8px;
   text-align: center;
+  line-height: 1.5;
 }
 
 /* 响应式：小屏幕下右侧面板变为全宽 */
@@ -415,6 +467,22 @@ function locateOnMap(item) {
   .right-panel {
     width: 100%;
     position: static;
+  }
+}
+
+@media (max-width: 560px) {
+  .home-layout {
+    padding: 12px;
+  }
+  .item-card :deep(.el-card__body) {
+    gap: 10px;
+  }
+  .thumb {
+    width: 96px;
+    height: 72px;
+  }
+  .map-empty {
+    height: 280px;
   }
 }
 </style>

@@ -110,20 +110,21 @@ onMounted(() => {
         <router-link to="/" class="brand">🎓 校园活动交流平台</router-link>
 
         <!-- 导航菜单 -->
-        <nav class="nav-menu">
+        <nav class="nav-menu" aria-label="主导航">
           <router-link
             v-for="m in navMenus"
             :key="m.path"
             :to="m.path"
             class="nav-item"
             :class="{ active: isActive(m.path) }"
+            :title="m.label"
           >
             <span class="nav-icon">{{ m.icon }}</span>
             <span class="nav-label">{{ m.label }}</span>
           </router-link>
         </nav>
 
-        <div class="spacer" />
+        <div class="spacer" aria-hidden="true" role="presentation" />
 
         <!-- 签到按钮 -->
         <div v-if="isLoggedIn" class="sign-section" @click="handleSign">
@@ -262,6 +263,7 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   margin-left: 20px;
+  min-width: 0;
 }
 
 .nav-item {
@@ -279,6 +281,13 @@ onMounted(() => {
 .nav-item:hover {
   background: #ecf5ff;
   color: #1d6df0;
+}
+
+.nav-item:focus-visible,
+.user-name:focus-visible,
+.notify-bell:focus-visible {
+  outline: 2px solid #1d6df0;
+  outline-offset: 2px;
 }
 
 .nav-item.active {
@@ -431,6 +440,7 @@ onMounted(() => {
   font-size: 12px;
   color: #606266;
   line-height: 1.4;
+  word-break: break-word;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -507,6 +517,10 @@ onMounted(() => {
   min-height: calc(100vh - 64px);
 }
 
+.header-inner > .user-name {
+  min-width: 0;
+}
+
 /* 响应式 */
 @media (max-width: 1200px) {
   .nav-label {
@@ -523,6 +537,14 @@ onMounted(() => {
   }
   .nav-menu {
     margin-left: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .nav-menu::-webkit-scrollbar {
+    display: none;
+  }
+  .notify-dropdown {
+    width: min(360px, calc(100vw - 24px));
   }
 }
 </style>
