@@ -133,6 +133,13 @@ onMounted(loadAll)
             class="gallery-img"
           />
         </div>
+
+        <!-- 位置信息：有地点名或坐标时展示，可跳首页地图查看 -->
+        <div v-if="content.location_name || (content.longitude != null && content.latitude != null)" class="loc-line">
+          <span class="loc-pin">📍</span>
+          <span class="loc-text">{{ content.location_name || ('经度 ' + content.longitude + '，纬度 ' + content.latitude) }}</span>
+          <el-button size="small" text type="primary" @click="toMapNav">查看地图 →</el-button>
+        </div>
       </el-card>
 
       <el-card shadow="never" class="comment-card">
@@ -214,6 +221,27 @@ onMounted(loadAll)
   line-height: 1.9;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.loc-line {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f0f7ff;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.loc-pin {
+  font-size: 14px;
+}
+
+.loc-text {
+  font-size: 13px;
+  color: #1d6df0;
+  flex: 1;
+  min-width: 0;
 }
 
 .nav-line {
