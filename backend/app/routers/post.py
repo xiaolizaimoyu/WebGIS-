@@ -8,6 +8,7 @@
 """
 import html
 import uuid
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -391,6 +392,35 @@ def content_stats(session: Session = Depends(get_session)):
     total = sum(by_type.values())
     comment_total = session.exec(select(func.count(Comment.id))).one()
     return ok({"total": total, "comment_total": comment_total, "by_type": by_type})
+
+
+@router.get("/contents/hot", summary="热门内容榜（按浏览量排序）")
+def list_hot_contents(
+    limit: int = Query(default=10, ge=1, le=50, description="返回条数，默认10，最多50"),
+    days: int = Query(default=7, ge=1, le=90, description="时间窗口（天），默认近7天，最多90天"),
+    session: Session = Depends(get_session),
+):
+    """近 N 天内浏览量最高的内容，供首页热门卡片展示。
+
+    排序：view_count 降序 → created_at 降序 → id 降序（保证稳定排序）。
+    注意：本路由必须声明在 /contents/{content_id} 之前，否则 "hot" 会被当成 id 解析。
+    """
+    since = datetime.now() - timedelta(days=days)
+    stmt = (
+        select(Content)
+        .where(Content.created_at >= since)
+        .order_by(Content.view_count.desc(), Content.created_at.desc(), Content.id.desc())
+        .limit(limit)
+    )
+    items = session.exec(stmt).all()
+    name_map = users_nickname_map(session, [c.author_id for c in items])
+    count_map = comments_count_map(session, [c.id for c in items])
+    return ok({
+        "items": [
+            content_to_dict(c, name_map.get(c.author_id, "未知用户"), count_map.get(c.id, 0))
+            for c in items
+        ],
+    })
 
 
 @router.put("/contents/{content_id}", summary="编辑自己发布的内容（需登录）")
