@@ -88,6 +88,36 @@ def _add_keyword_filter(filters: list, keyword: Optional[str]) -> None:
         filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
 
 
+def _build_content_filters(
+    *,
+    type: Optional[str] = None,
+    keyword: Optional[str] = None,
+    author_id: Optional[int] = None,
+    category: Optional[str] = None,
+    min_view_count: Optional[int] = None,
+    has_location: bool = False,
+    base: Optional[list] = None,
+) -> list:
+    """统一组装列表查询的 WHERE 条件，list_contents 与 list_my_contents 共用。
+
+    base 用于注入额外的前置条件（如 my 列表的 author_id == user.id）。
+    """
+    filters = list(base) if base else []
+    if type:
+        filters.append(Content.type == type)
+    if author_id is not None:
+        filters.append(Content.author_id == author_id)
+    if category:
+        filters.append(Content.category == category)
+    if min_view_count is not None:
+        filters.append(Content.view_count >= min_view_count)
+    if has_location:
+        # 地图只渲染拾取过地理位置的帖子，经纬度必然成对（创建时已校验）
+        filters.append(Content.latitude.is_not(None))
+    _add_keyword_filter(filters, keyword)
+    return filters
+
+
 def _validate_sort(value: str, options, field_name: str = "sort") -> str:
     """排序参数校验：非法值直接报错，合法返回原值。list/list_my/comments 三处共用。"""
     if value not in options:
@@ -292,17 +322,10 @@ def list_contents(
     _validate_optional_type(type)
     _validate_sort(sort, SORT_OPTIONS)
 
-    filters = [Content.type == type] if type else []
-    if author_id is not None:
-        filters.append(Content.author_id == author_id)
-    if category:
-        filters.append(Content.category == category)
-    if min_view_count is not None:
-        filters.append(Content.view_count >= min_view_count)
-    _add_keyword_filter(filters, keyword)
-    if has_location:
-        # 地图只渲染拾取过地理位置的帖子，经纬度必然成对（创建时已校验），用一个条件即可
-        filters.append(Content.latitude.is_not(None))
+    filters = _build_content_filters(
+        type=type, keyword=keyword, author_id=author_id, category=category,
+        min_view_count=min_view_count, has_location=has_location,
+    )
     items, count_map, total = _query_contents_page(session, filters, sort, page, size)
     name_map = users_nickname_map(session, [c.author_id for c in items])
     return ok({
@@ -337,10 +360,7 @@ def list_my_contents(
     _validate_optional_type(type)
     _validate_sort(sort, SORT_OPTIONS)
 
-    filters = [Content.author_id == user.id]
-    if type:
-        filters.append(Content.type == type)
-    _add_keyword_filter(filters, keyword)
+    filters = _build_content_filters(type=type, keyword=keyword, base=[Content.author_id == user.id])
     items, count_map, total = _query_contents_page(session, filters, sort, page, size)
     return ok({
         "total": total,
