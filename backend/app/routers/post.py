@@ -128,6 +128,13 @@ def _validate_sort(value: str, options: Tuple[str, ...], field_name: str = "sort
     return value
 
 
+def _total_pages(total: int, size: int) -> int:
+    """分页页数计算：上取整。size<=0 时兜底返回 total，避免除零异常。"""
+    if size <= 0:
+        return total
+    return (total + size - 1) // size
+
+
 def _clean_text(value: str, field_name: str) -> str:
     """去首尾空白、拒绝纯空白、转义 HTML 特殊字符（防存储型 XSS）。标题 / 正文 / 评论共用。"""
     value = value.strip()
@@ -333,7 +340,7 @@ def list_contents(
     name_map = users_nickname_map(session, [c.author_id for c in items])
     return ok({
         "total": total,
-        "total_pages": (total + size - 1) // size,
+        "total_pages": _total_pages(total, size),
         "items": [
             content_to_dict(
                 c,
@@ -367,7 +374,7 @@ def list_my_contents(
     items, count_map, total = _query_contents_page(session, filters, sort, page, size)
     return ok({
         "total": total,
-        "total_pages": (total + size - 1) // size,
+        "total_pages": _total_pages(total, size),
         "items": [content_to_dict(c, user.nickname, count_map.get(c.id, 0), True) for c in items],
     })
 
@@ -492,7 +499,7 @@ def list_comments(
     # 可选鉴权：已登录时每条评论附带 is_author，前端据此显示删除按钮
     return ok({
         "total": total,
-        "total_pages": (total + size - 1) // size,
+        "total_pages": _total_pages(total, size),
         "items": [
             comment_to_dict(
                 c,
