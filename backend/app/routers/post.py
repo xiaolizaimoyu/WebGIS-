@@ -211,6 +211,7 @@ def list_contents(
     has_location: bool = Query(default=False, description="WebGIS：仅返回绑定了经纬度的内容（地图点位用）"),
     author_id: Optional[int] = Query(default=None, description="按作者 id 筛选，不传为全部"),
     category: Optional[str] = Query(default=None, max_length=20, description="按二级子分类筛选，如 食堂推荐"),
+    min_view_count: Optional[int] = Query(default=None, ge=0, description="按浏览量下限筛选，只返回热度不低于该值的内容"),
     session: Session = Depends(get_session),
 ):
     _validate_optional_type(type)
@@ -222,6 +223,8 @@ def list_contents(
         filters.append(Content.author_id == author_id)
     if category:
         filters.append(Content.category == category)
+    if min_view_count is not None:
+        filters.append(Content.view_count >= min_view_count)
     keyword = (keyword or "").strip()
     if keyword:
         filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
