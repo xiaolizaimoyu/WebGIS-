@@ -1,6 +1,6 @@
 """数据表模型（归属：后端 F，全项目唯一建表来源）
 
-共 11 张表：
+共 12 张表：
 - users          用户（含积分）
 - contents       内容（会议/动态/美食/失物，type 区分）
 - comments       评论
@@ -12,6 +12,7 @@
 - mall_goods     积分商城商品
 - orders         兑换订单
 - follows        关注（用户-用户）
+- carpools       组队拼车（发布/编辑/删除/申请）
 
 改动表结构请统一在此修改，并由 db.create_db_and_tables() 自动建表/补列。
 """
@@ -187,4 +188,28 @@ class Order(SQLModel, table=True):
     goods_name: str = Field(description="兑换时商品名称快照")
     points_cost: int = Field(description="消耗积分")
     status: str = Field(default="pending", description="订单状态：pending=待处理，processed=已完成，cancelled=已取消")
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
+# ==================== 组队拼车 ====================
+
+class Carpool(SQLModel, table=True):
+    """拼车表：组队拼车发布/编辑/删除/申请（第 12 张表，归属：后端 C）"""
+
+    __tablename__ = "carpools"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str = Field(max_length=60, description="拼车标题")
+    from_: str = Field(max_length=50, description="出发地（from 为 SQL 关键字，模型用 from_ 映射）")
+    to: str = Field(max_length=50, description="目的地")
+    depart_time: str = Field(max_length=20, description="出发时间 YYYY-MM-DD HH:mm")
+    return_time: str = Field(default="", max_length=20, description="返回时间，可空")
+    seats_total: int = Field(default=4, description="总座位数 1-7")
+    seats_left: int = Field(default=4, description="剩余座位数")
+    price_per_person: float = Field(default=0, description="人均费用（元）")
+    phone: str = Field(max_length=20, description="联系电话（11 位手机号）")
+    note: str = Field(default="", max_length=500, description="备注说明")
+    author_id: int = Field(foreign_key="users.id", index=True, description="发布者用户 ID")
+    author_name: str = Field(max_length=30, description="发布者昵称快照")
+    status: str = Field(default="recruiting", description="recruiting 招募中 / full 已满员 / closed 已关闭")
     created_at: datetime = Field(default_factory=datetime.now)

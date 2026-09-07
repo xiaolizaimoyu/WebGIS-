@@ -1,13 +1,14 @@
 """扩展模块路由（问答 / 学习资料 / 组队拼车）
 
-这些模块前端已实现 UI，后端提供基础接口骨架，返回空列表或演示数据，
-确保前端调用不报错。后续可按需扩展为完整 CRUD + 数据库表。
+这些模块前端已实现 UI；拼车已迁移为数据库完整 CRUD（carpools 表），
+问答与资料为内存演示数据。
 
 前缀：
 - /api/questions     校园问答
 - /api/materials     学习资料
 - /api/carpools      组队拼车
 """
+import re
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -18,9 +19,10 @@ from fastapi.responses import Response
 
 from app.core.response import ok, BizError
 from app.routers.material_docs import generate_material_file
+from app.routers.post import _get_optional_user
 from app.core.security import get_current_user
 from app.db import get_session
-from app.models import User
+from app.models import Carpool, User
 
 router = APIRouter(tags=["扩展模块"])
 
@@ -61,17 +63,6 @@ _materials = [
      "created_at": (datetime.now() - timedelta(days=5)).isoformat()},
 ]
 
-_carpools = [
-    {"id": 1, "title": "周末去济南火车站拼车", "destination": "济南站", "departure": "学校东门", "departure_time": "2026-09-07 08:00",
-     "people_needed": 3, "people_joined": 1, "contact": "微信: xxx", "author_name": "旅行达人", "note": "AA制，人均约50元",
-     "created_at": (datetime.now() - timedelta(hours=3)).isoformat()},
-    {"id": 2, "title": "周五晚去淄博站拼车", "destination": "淄博站", "departure": "学校北门", "departure_time": "2026-09-12 18:00",
-     "people_needed": 2, "people_joined": 2, "contact": "QQ: xxx", "author_name": "回家党", "note": "已有2人，还差2人",
-     "created_at": (datetime.now() - timedelta(hours=6)).isoformat()},
-    {"id": 3, "title": "国庆去青岛玩拼车", "destination": "青岛", "departure": "学校", "departure_time": "2026-10-01 07:00",
-     "people_needed": 4, "people_joined": 1, "contact": "电话: xxx", "author_name": "旅游爱好者", "note": "三天两夜，行程可商量",
-     "created_at": (datetime.now() - timedelta(days=1)).isoformat()},
-]
 
 
 # ==================== 校园问答 ====================
@@ -179,31 +170,205 @@ def like_material(mid: int, user: User = Depends(get_current_user)):
     return ok({"likes": m["likes"]}, "点赞成功")
 
 
-# ==================== 组队拼车 ====================
+# ==================== 组队拼车（carpools 表，完整 CRUD） ====================
+
+# 拼车输入校验：标题/地点必填、手机号 11 位、座位 1-7、出发时间必须晚于当前
+PHONE_RE = re.compile(r"^1\d{10}$")
+
+
+def _validate_carpool(data: dict, is_create: bool = True) -> dict:
+    err = lambda msg: (_ for _ in ()).throw(BizError(400, msg))
+    title = (data.get("title") or "").strip()
+    if not title:
+        err("请填写拼车标题")
+    if len(title) > 60:
+        err("标题不能超过 60 字")
+    frm = (data.get("from") or "").strip()
+    to = (data.get("to") or "").strip()
+    if not frm:
+        err("请填写出发地")
+    if not to:
+        err("请填写目的地")
+    if len(frm) > 50 or len(to) > 50:
+        err("出发地/目的地不能超过 50 字")
+
+    depart_time = (data.get("depart_time") or "").strip()
+    if not depart_time:
+        err("请选择出发时间")
+    try:
+        dt = datetime.strptime(depart_time, "%Y-%m-%d %H:%M")
+    except ValueError:
+        err("出发时间格式不正确，应为 YYYY-MM-DD HH:mm")
+    if is_create and dt < datetime.now():
+        err("出发时间不能早于当前时间")
+
+    seats_total = data.get("seats_total")
+    if seats_total is None:
+        err("请设置座位数")
+    try:
+        seats_total = int(seats_total)
+    except (TypeError, ValueError):
+        err("座位数必须是整数")
+    if not 1 <= seats_total <= 7:
+        err("座位数需在 1-7 之间")
+
+    price = data.get("price_per_person", 0)
+    try:
+        price = float(price or 0)
+    except (TypeError, ValueError):
+        err("费用必须是数字")
+    if price < 0 or price > 1000:
+        err("费用需在 0-1000 元之间")
+
+    phone = (data.get("phone") or "").strip()
+    if not phone:
+        err("请填写联系电话")
+    if not PHONE_RE.match(phone):
+        err("手机号格式不正确，需为 11 位数字（如 13812345678）")
+
+    return_time = (data.get("return_time") or "").strip()
+    if return_time:
+        try:
+            datetime.strptime(return_time, "%Y-%m-%d %H:%M")
+        except ValueError:
+            err("返回时间格式不正确，应为 YYYY-MM-DD HH:mm")
+
+    return {
+        "title": title, "from": frm, "to": to,
+        "depart_time": depart_time, "return_time": return_time,
+        "seats_total": seats_total, "price_per_person": price,
+        "phone": phone, "note": (data.get("note") or "").strip()[:500],
+    }
+
+
+def _carpool_to_dict(c: Carpool, user: Optional[User] = None) -> dict:
+    """ORM -> 前端 camelCase dict（含 is_author 标记，供编辑/删除按钮显隐）"""
+    return {
+        "id": c.id, "title": c.title, "from": c.from_, "to": c.to,
+        "depart_time": c.depart_time, "return_time": c.return_time or "",
+        "seats_total": c.seats_total, "seats_left": c.seats_left,
+        "price_per_person": c.price_per_person, "phone": c.phone,
+        "note": c.note or "", "author_id": c.author_id,
+        "author_name": c.author_name, "status": c.status,
+        "created_at": c.created_at.isoformat(),
+        "is_author": bool(user and user.id == c.author_id),
+    }
+
 
 @router.get("/carpools", summary="拼车列表")
-def list_carpools(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=50)):
-    total = len(_carpools)
+def list_carpools(keyword: Optional[str] = None, status: Optional[str] = None,
+                  page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=50),
+                  user: Optional[User] = Depends(_get_optional_user),
+                  session: Session = Depends(get_session)):
+    stmt = select(Carpool).order_by(Carpool.created_at.desc())
+    if status:
+        stmt = stmt.where(Carpool.status == status)
+    all_items = session.exec(stmt).all()
+    if keyword:
+        kw = keyword.strip()
+        all_items = [c for c in all_items if kw in c.title or kw in c.from_ or kw in c.to]
+    total = len(all_items)
     start = (page - 1) * size
-    return ok({"total": total, "page": page, "size": size, "items": _carpools[start:start + size]})
+    items = [_carpool_to_dict(c, user) for c in all_items[start:start + size]]
+    return ok({"total": total, "page": page, "size": size, "items": items})
 
 
 @router.get("/carpools/{cid}", summary="拼车详情")
-def get_carpool(cid: int):
-    c = next((c for c in _carpools if c["id"] == cid), None)
+def get_carpool(cid: int, user: Optional[User] = Depends(_get_optional_user),
+                session: Session = Depends(get_session)):
+    c = session.get(Carpool, cid)
     if not c:
-        from app.core.response import BizError
         raise BizError(404, "拼车信息不存在")
-    return ok(c)
+    return ok(_carpool_to_dict(c, user))
 
 
-@router.post("/carpools", summary="发布拼车（需登录）")
-def create_carpool(data: dict, user: User = Depends(get_current_user)):
-    new_id = max(c["id"] for c in _carpools) + 1
-    c = {"id": new_id, "title": data.get("title", ""), "destination": data.get("destination", ""),
-         "departure": data.get("departure", ""), "departure_time": data.get("departure_time", ""),
-         "people_needed": data.get("people_needed", 3), "people_joined": 1,
-         "contact": data.get("contact", ""), "author_name": user.nickname,
-         "note": data.get("note", ""), "created_at": datetime.now().isoformat()}
-    _carpools.append(c)
-    return ok(c, "发布成功")
+@router.post("/carpools", summary="发布拼车（需登录，含完整校验）")
+def create_carpool(data: dict, user: User = Depends(get_current_user),
+                   session: Session = Depends(get_session)):
+    v = _validate_carpool(data)
+    c = Carpool(
+        title=v["title"], from_=v["from"], to=v["to"],
+        depart_time=v["depart_time"], return_time=v["return_time"],
+        seats_total=v["seats_total"], seats_left=v["seats_total"],
+        price_per_person=v["price_per_person"], phone=v["phone"],
+        note=v["note"], author_id=user.id, author_name=user.nickname,
+        status="recruiting",
+    )
+    session.add(c)
+    session.commit()
+    session.refresh(c)
+    return ok(_carpool_to_dict(c, user), "发布成功")
+
+
+@router.put("/carpools/{cid}", summary="编辑拼车（仅作者）")
+def update_carpool(cid: int, data: dict, user: User = Depends(get_current_user),
+                   session: Session = Depends(get_session)):
+    c = session.get(Carpool, cid)
+    if not c:
+        raise BizError(404, "拼车信息不存在")
+    if c.author_id != user.id:
+        raise BizError(403, "只能编辑自己发布的拼车")
+    v = _validate_carpool(data, is_create=False)
+    # 总座位数不能小于已占用座位（已报名人数）
+    if v["seats_total"] < c.seats_total - c.seats_left:
+        raise BizError(400, f"总座位不能小于已占用座位 {c.seats_total - c.seats_left} 个")
+    c.title = v["title"]
+    c.from_ = v["from"]
+    c.to = v["to"]
+    c.depart_time = v["depart_time"]
+    c.return_time = v["return_time"]
+    c.seats_total = v["seats_total"]
+    c.price_per_person = v["price_per_person"]
+    c.phone = v["phone"]
+    c.note = v["note"]
+    c.status = "recruiting" if c.seats_left > 0 else "full"
+    session.add(c)
+    session.commit()
+    session.refresh(c)
+    return ok(_carpool_to_dict(c, user), "保存成功")
+
+
+@router.delete("/carpools/{cid}", summary="删除拼车（仅作者）")
+def delete_carpool(cid: int, user: User = Depends(get_current_user),
+                   session: Session = Depends(get_session)):
+    c = session.get(Carpool, cid)
+    if not c:
+        raise BizError(404, "拼车信息不存在")
+    if c.author_id != user.id:
+        raise BizError(403, "只能删除自己发布的拼车")
+    session.delete(c)
+    session.commit()
+    return ok({"id": cid}, "删除成功")
+
+
+@router.post("/carpools/{cid}/apply", summary="申请加入拼车（需登录）")
+def apply_carpool(cid: int, data: dict, user: User = Depends(get_current_user),
+                  session: Session = Depends(get_session)):
+    """申请加入：校验手机号/人数，成功后剩余座位扣减，满员置为 full"""
+    c = session.get(Carpool, cid)
+    if not c:
+        raise BizError(404, "拼车信息不存在")
+    if c.author_id == user.id:
+        raise BizError(400, "不能申请自己发布的拼车")
+    if c.seats_left <= 0:
+        raise BizError(400, "该拼车已满员")
+    name = (data.get("name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    if not name:
+        raise BizError(400, "请填写姓名")
+    try:
+        people = int(data.get("people_count", 1))
+    except (TypeError, ValueError):
+        people = 1
+    if not 1 <= people <= c.seats_left:
+        raise BizError(400, f"申请人数需在 1-{c.seats_left} 之间")
+    if not PHONE_RE.match(phone):
+        raise BizError(400, "手机号格式不正确，需为 11 位数字")
+    c.seats_left -= people
+    if c.seats_left == 0:
+        c.status = "full"
+    session.add(c)
+    session.commit()
+    session.refresh(c)
+    return ok({"seats_left": c.seats_left, "status": c.status}, "申请已提交，等待车主确认")
+
