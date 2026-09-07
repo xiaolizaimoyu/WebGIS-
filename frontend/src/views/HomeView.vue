@@ -34,12 +34,6 @@ const page = ref(1)
 const size = ref(8)
 const loading = ref(false)
 
-// setup 阶段恢复缓存：返回首页时首屏直接渲染上次内容，避免空白/一闪
-if (cachedType === activeType.value && cachedList.length) {
-  list.value = cachedList
-  total.value = cachedTotal
-}
-
 // 请求序号：防止快速切换 tab/翻页时旧请求晚返回覆盖新结果
 let loadSeq = 0
 
@@ -49,6 +43,12 @@ let loadSeq = 0
 let cachedList = []
 let cachedTotal = 0
 let cachedType = ''
+
+// setup 阶段恢复缓存：返回首页时首屏直接渲染上次内容，避免空白/一闪
+if (cachedType === activeType.value && cachedList.length) {
+  list.value = cachedList
+  total.value = cachedTotal
+}
 
 // 统一坐标字段：后端返回 longitude/latitude，兼容 mock 的 lng/lat
 function normalizeItem(item) {

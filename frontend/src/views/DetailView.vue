@@ -34,7 +34,9 @@ async function loadDetail() {
 
 async function loadComments() {
   try {
-    comments.value = await postApi.listComments(contentId)
+    const data = await postApi.listComments(contentId)
+    // 接口返回 { total, items }，必须取 items 数组（直接赋对象会导致 v-for 崩溃）
+    comments.value = Array.isArray(data) ? data : (data?.items || [])
   } catch (e) {
     // 评论加载失败不阻塞页面，置空即可
     comments.value = []
@@ -151,7 +153,7 @@ onMounted(loadAll)
 
         <el-empty v-if="!comments.length" description="还没有评论，来抢沙发～" :image-size="80" />
         <div v-for="c in comments" :key="c.id" class="comment-item">
-          <div class="avatar">{{ c.author_name.slice(0, 1) }}</div>
+          <div class="avatar">{{ (c.author_name || "?") .slice(0, 1) }}</div>
           <div class="comment-main">
             <div class="who">
               <span class="nick">{{ c.author_name }}</span>
