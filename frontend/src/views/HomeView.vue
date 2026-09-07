@@ -261,6 +261,11 @@ onMounted(load)
   margin-bottom: 14px;
   border-radius: 10px;
   cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.item-card:hover {
+  transform: translateY(-2px);
 }
 
 .item-card :deep(.el-card__body) {
@@ -375,6 +380,19 @@ onMounted(load)
   .right-panel {
     width: 100%;
     position: static;
+  }
+}
+
+@media (max-width: 560px) {
+  .home-layout {
+    padding: 12px;
+  }
+  .item-card :deep(.el-card__body) {
+    gap: 10px;
+  }
+  .thumb {
+    width: 96px;
+    height: 72px;
   }
 }
 </style>
