@@ -275,10 +275,10 @@ def run(reset: bool = False) -> None:
         session.add(Follow(follower_id=users[1].id, following_id=users[3].id))
         session.commit()
 
-        # 9) 演示签到记录（最近3天，每个用户）
+        # 9) 演示签到记录（昨天起往前 3 天，不包含今天——今天留待真实签到）
         for i, u in enumerate(users):
             for day_offset in range(3):
-                sign_date = date.today() - timedelta(days=day_offset)
+                sign_date = date.today() - timedelta(days=day_offset + 1)
                 continuous = 3 - day_offset + i  # 模拟不同连续天数
                 points = 10 + (20 if continuous % 7 == 0 else 0)
                 session.add(SignRecord(
@@ -292,7 +292,7 @@ def run(reset: bool = False) -> None:
                     balance_before=u.points - points,
                     balance_after=u.points,
                     reason="sign",
-                    created_at=now - timedelta(days=day_offset),
+                    created_at=now - timedelta(days=day_offset + 1),
                 ))
         session.commit()
 
