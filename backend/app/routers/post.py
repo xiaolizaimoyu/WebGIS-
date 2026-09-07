@@ -43,6 +43,9 @@ SORT_OPTIONS = ("latest", "hot")
 COMMENT_ORDER_OPTIONS = ("asc", "desc")
 # 列表卡片摘要长度（正文截取前 N 字 + "..."）
 SUMMARY_LENGTH = 100
+# Query 参数长度上限（与数据库列宽留余量，避免超长字符串拖慢 LIKE 查询）
+MAX_KEYWORD_LENGTH = 50
+MAX_CATEGORY_LENGTH = 20
 
 
 def _normalize_category(content_type: str, category: Optional[str]) -> Optional[str]:
@@ -309,13 +312,13 @@ def create_content(
 @router.get("/contents", summary="内容列表（首页信息流 / 地图点位 / 搜索）")
 def list_contents(
     type: Optional[str] = Query(default=None, description="按 type 筛选，不传为全部"),
-    keyword: Optional[str] = Query(default=None, max_length=50, description="关键词搜索：匹配标题或正文，不传为不搜索"),
+    keyword: Optional[str] = Query(default=None, max_length=MAX_KEYWORD_LENGTH, description="关键词搜索：匹配标题或正文，不传为不搜索"),
     sort: str = Query(default="latest", description="排序：latest(默认,按时间倒序) | hot(按评论数降序)"),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, ge=1, le=100),
     has_location: bool = Query(default=False, description="WebGIS：仅返回绑定了经纬度的内容（地图点位用）"),
     author_id: Optional[int] = Query(default=None, description="按作者 id 筛选，不传为全部"),
-    category: Optional[str] = Query(default=None, max_length=20, description="按二级子分类筛选，如 食堂推荐"),
+    category: Optional[str] = Query(default=None, max_length=MAX_CATEGORY_LENGTH, description="按二级子分类筛选，如 食堂推荐"),
     min_view_count: Optional[int] = Query(default=None, ge=0, description="按浏览量下限筛选，只返回热度不低于该值的内容"),
     session: Session = Depends(get_session),
 ):
@@ -345,7 +348,7 @@ def list_contents(
 @router.get("/contents/mine", summary="我的发布列表（需登录）")
 def list_my_contents(
     type: Optional[str] = Query(default=None, description="按 type 筛选，不传为全部"),
-    keyword: Optional[str] = Query(default=None, max_length=50, description="关键词搜索：匹配标题或正文，不传为不搜索"),
+    keyword: Optional[str] = Query(default=None, max_length=MAX_KEYWORD_LENGTH, description="关键词搜索：匹配标题或正文，不传为不搜索"),
     sort: str = Query(default="latest", description="排序：latest(默认) | hot(按评论数降序)"),
     page: int = Query(default=1, ge=1),
     size: int = Query(default=10, ge=1, le=50),
