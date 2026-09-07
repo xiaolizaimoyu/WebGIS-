@@ -28,6 +28,7 @@ const notifyList = computed(() => notificationStore.list.slice(0, 5))
 // 导航菜单
 const navMenus = [
   { path: '/', label: '首页', icon: '🏠' },
+  { path: '/map', label: '校园地图', icon: '🗺️' },
   { path: '/questions', label: '校园问答', icon: '❓' },
   { path: '/materials', label: '学习资料', icon: '📚' },
   { path: '/carpool', label: '组队拼车', icon: '🚗' },
@@ -252,6 +253,7 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
   margin-left: 20px;
+  min-width: 0;
 }
 
 .nav-item {
@@ -513,6 +515,11 @@ onMounted(() => {
   }
   .nav-menu {
     margin-left: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .nav-menu::-webkit-scrollbar {
+    display: none;
   }
 }
 </style>
