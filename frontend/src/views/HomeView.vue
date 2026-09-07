@@ -163,7 +163,7 @@ function onImageError(event) {
 }
 
 // ====== 右侧地图（前端 A 组件整合） ======
-const mapCenter = ref([116.397428, 39.90923])
+const mapCenter = ref([118.001917, 36.814013])
 const mapZoom = ref(12)
 
 function coordinate(value) {

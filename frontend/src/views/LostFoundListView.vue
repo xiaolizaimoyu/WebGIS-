@@ -38,7 +38,7 @@ function toDetail(id) {
   router.push(`/lost-found/${id}`)
 }
 
-const mapCenter = ref([116.397428, 39.90923])
+const mapCenter = ref([118.001917, 36.814013])
 const mapMarkers = computed(() => [])
 
 onMounted(load)
@@ -78,7 +78,7 @@ onMounted(load)
     </div>
 
     <div class="right-panel">
-      <WeatherWidget city="北京" :use-mock="true" />
+      <WeatherWidget />
       <div class="map-wrapper">
         <div class="map-header"><span class="map-title">🗺️ 校园地图</span></div>
         <MapComponent ref="mapRef" :center="mapCenter" :zoom="14" :markers="mapMarkers" height="360px" />
