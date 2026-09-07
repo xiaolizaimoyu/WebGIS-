@@ -355,6 +355,15 @@ def delete_content(
         raise BizError(2001, "内容不存在或已被删除")
     if content.author_id != user.id:
         raise BizError(2003, "只能删除自己发布的内容")
+    # 清理该内容上传的图片文件，避免磁盘残留
+    for img_url in (content.images or []):
+        if img_url.startswith("/uploads/"):
+            img_path = UPLOAD_DIR / Path(img_url).name
+            if img_path.exists():
+                try:
+                    img_path.unlink()
+                except OSError:
+                    pass  # 文件清理失败不阻塞删除流程
     # 批量删除该内容下的所有评论，避免逐条 ORM delete 的 N+1 问题
     session.execute(
         text("DELETE FROM comments WHERE content_id = :cid"),
