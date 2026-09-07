@@ -29,6 +29,7 @@ const notifyList = computed(() => notificationStore.list.slice(0, 5))
 // 导航菜单
 const navMenus = [
   { path: '/', label: '首页', icon: '🏠' },
+  { path: '/map', label: '校园地图', icon: '🗺️' },
   { path: '/questions', label: '校园问答', icon: '❓' },
   { path: '/materials', label: '学习资料', icon: '📚' },
   { path: '/carpool', label: '组队拼车', icon: '🚗' },
