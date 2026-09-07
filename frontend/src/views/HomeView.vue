@@ -178,10 +178,10 @@ onMounted(load)
               </el-button>
             </div>
           </div>
-          <el-image v-if="firstImage(c)" :src="firstImage(c)" fit="cover" class="thumb" @error="onImageError" />
+          <el-image v-if="firstImage(c)" :src="firstImage(c)" fit="cover" lazy class="thumb" @error="onImageError" />
         </el-card>
 
-        <el-empty v-if="!loading && !list.length" description="这里还空空如也，来发布第一条内容吧" />
+        <el-empty v-if="!loading && !list.length" description="这里还空空如也，来发布第一条内容吧" aria-live="polite" />
       </div>
 
       <div v-if="total > size" class="pager">
