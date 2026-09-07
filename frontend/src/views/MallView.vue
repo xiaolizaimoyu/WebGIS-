@@ -500,6 +500,7 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   padding: 20px 0;
+  overflow-x: auto;
 }
 
 .map-wrapper {
@@ -561,6 +562,10 @@ onMounted(() => {
   }
   .filter-row :deep(.el-input) {
     width: 100% !important;
+  }
+  .pager :deep(.el-pagination) {
+    margin: 0 auto;
+    flex-shrink: 0;
   }
 }
 </style>
