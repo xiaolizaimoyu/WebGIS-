@@ -7,10 +7,33 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as postApi from '@/api/post'
 import * as socialApi from '@/api/social'
+import { getMe } from '@/api/user' // 复用前端A的封装：/user/me 返回 content_count/comment_count
 import { formatTime, TYPE_MAP } from '@/api/const'
 
 const router = useRouter()
 const activeTab = ref('posts')
+
+// ===== 个人统计（规划书 TODO：数据统计展示）=====
+// 我的发布/我的评论来自 /user/me，我的收藏来自 /social/favorites/mine
+const statContent = ref(0)
+const statComment = ref(0)
+const statFav = ref(0)
+
+async function loadStats() {
+  try {
+    const [me, fav] = await Promise.all([
+      getMe().catch(() => null),
+      socialApi.myFavorites({ page: 1, size: 1 }).catch(() => null)
+    ])
+    if (me) {
+      statContent.value = me.content_count ?? 0
+      statComment.value = me.comment_count ?? 0
+    }
+    if (fav) statFav.value = fav.total ?? 0
+  } catch {
+    // 统计加载失败不阻塞页面
+  }
+}
 
 // ===== 我的发布 =====
 const list = ref([])
@@ -77,6 +100,7 @@ async function unfav(item) {
   await socialApi.toggleFavorite(item.content.id)
   ElMessage.success('已取消收藏')
   await loadFavorites()
+  loadStats() // 取消收藏后同步统计
 }
 
 function onFavPageChange(p) {
@@ -109,13 +133,33 @@ async function removeItem(id, title) {
   await postApi.deleteContent(id)
   ElMessage.success('已删除')
   await load()
+  loadStats() // 删除后同步统计
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadStats()
+})
 </script>
 
 <template>
   <div class="page-container">
+    <!-- 个人统计条（规划书 TODO：数据统计展示） -->
+    <div class="stat-bar">
+      <div class="stat-card">
+        <span class="stat-num">{{ statContent }}</span>
+        <span class="stat-label">我的发布</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num">{{ statComment }}</span>
+        <span class="stat-label">我的评论</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num">{{ statFav }}</span>
+        <span class="stat-label">我的收藏</span>
+      </div>
+    </div>
+
     <el-tabs v-model="activeTab" class="mine-tabs" @tab-change="onTabChange">
       <!-- ===== 我的发布 ===== -->
       <el-tab-pane label="我的发布" name="posts">
@@ -210,6 +254,35 @@ onMounted(load)
 </template>
 
 <style scoped>
+/* 个人统计条 */
+.stat-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.stat-card {
+  flex: 1;
+  background: #f7f8fa;
+  border-radius: 10px;
+  padding: 14px 0;
+  text-align: center;
+}
+
+.stat-num {
+  display: block;
+  font-size: 24px;
+  font-weight: 700;
+  color: #409eff;
+}
+
+.stat-label {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: #909399;
+}
+
 .head {
   display: flex;
   align-items: baseline;
