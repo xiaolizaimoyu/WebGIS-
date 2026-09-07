@@ -80,6 +80,13 @@ def _add_keyword_filter(filters: list, keyword: Optional[str]) -> None:
         filters.append(or_(Content.title.contains(keyword), Content.body.contains(keyword)))
 
 
+def _validate_sort(value: str, options, field_name: str = "sort") -> str:
+    """排序参数校验：非法值直接报错，合法返回原值。list/list_my/comments 三处共用。"""
+    if value not in options:
+        raise BizError(400, f"排序参数 {field_name} 仅支持：{' | '.join(options)}")
+    return value
+
+
 def _clean_text(value: str, field_name: str) -> str:
     """去首尾空白、拒绝纯空白、转义 HTML 特殊字符（防存储型 XSS）。标题 / 正文 / 评论共用。"""
     value = value.strip()
@@ -275,8 +282,7 @@ def list_contents(
     session: Session = Depends(get_session),
 ):
     _validate_optional_type(type)
-    if sort not in SORT_OPTIONS:
-        raise BizError(400, f"排序参数 sort 仅支持：{' | '.join(SORT_OPTIONS)}")
+    _validate_sort(sort, SORT_OPTIONS)
 
     filters = [Content.type == type] if type else []
     if author_id is not None:
@@ -321,8 +327,7 @@ def list_my_contents(
     否则 "mine" 会被当成 id 解析而报 422。
     """
     _validate_optional_type(type)
-    if sort not in SORT_OPTIONS:
-        raise BizError(400, f"排序参数 sort 仅支持：{' | '.join(SORT_OPTIONS)}")
+    _validate_sort(sort, SORT_OPTIONS)
 
     filters = [Content.author_id == user.id]
     if type:
@@ -446,8 +451,7 @@ def list_comments(
 ):
     if session.get(Content, content_id) is None:
         raise BizError(2001, "内容不存在或已被删除")
-    if order not in COMMENT_ORDER_OPTIONS:
-        raise BizError(400, f"排序参数 order 仅支持：{' | '.join(COMMENT_ORDER_OPTIONS)}")
+    _validate_sort(order, COMMENT_ORDER_OPTIONS, "order")
     total = session.exec(
         select(func.count(Comment.id)).where(Comment.content_id == content_id)
     ).one()
