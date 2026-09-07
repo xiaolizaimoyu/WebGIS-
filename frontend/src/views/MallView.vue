@@ -398,6 +398,13 @@ onMounted(() => {
   position: relative;
 }
 
+.goods-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .goods-emoji {
   font-size: 56px;
   transition: transform 0.3s;
@@ -535,6 +542,18 @@ onMounted(() => {
   }
   .goods-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .page-layout {
+    padding: 12px;
+  }
+  .banner-content {
+    align-items: flex-start;
+  }
+  .banner-decoration {
+    display: none;
   }
 }
 </style>
