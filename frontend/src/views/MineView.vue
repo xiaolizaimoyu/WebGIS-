@@ -53,6 +53,53 @@ async function load() {
   }
 }
 
+// ===== 批量管理（规划书 TODO：批量管理）=====
+// 后端暂无批量删除接口，逐条调用 DELETE 后统一刷新（已删除的自动跳过）
+const managing = ref(false)
+const selected = ref([]) // 选中的内容 id 数组
+
+const toggleManaging = () => {
+  managing.value = !managing.value
+  selected.value = []
+}
+
+const isSelected = (id) => selected.value.includes(id)
+
+function toggleSelect(id) {
+  const i = selected.value.indexOf(id)
+  if (i >= 0) selected.value.splice(i, 1)
+  else selected.value.push(id)
+}
+
+function selectAll() {
+  // 全选/反选本页
+  selected.value =
+    selected.value.length === list.value.length ? [] : list.value.map((c) => c.id)
+}
+
+async function removeSelected() {
+  if (!selected.value.length) {
+    ElMessage.info('请先勾选要删除的内容')
+    return
+  }
+  const count = selected.value.length
+  try {
+    await ElMessageBox.confirm(
+      `确定批量删除选中的 ${count} 条内容吗？删除后不可恢复，其下评论也会一并删除。`,
+      '批量删除确认',
+      { type: 'warning', confirmButtonText: '全部删除', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+  const results = await Promise.allSettled(selected.value.map((id) => postApi.deleteContent(id)))
+  const okCount = results.filter((r) => r.status === 'fulfilled').length
+  ElMessage.success(`已删除 ${okCount} 条`)
+  selected.value = []
+  await load()
+  loadStats()
+}
+
 // ===== 我的收藏 =====
 // 接口只返回 content_id，需逐条取详情组装（N+1，待后端提供批量/联表接口后优化）
 const favList = ref([])
@@ -166,11 +213,35 @@ onMounted(() => {
         <div class="head">
           <span class="count">共 {{ total }} 条</span>
           <el-button type="primary" size="small" @click="router.push('/publish')">＋ 再发一条</el-button>
+          <el-button
+            :type="managing ? 'warning' : 'default'"
+            size="small"
+            plain
+            @click="toggleManaging"
+          >
+            {{ managing ? '退出管理' : '批量管理' }}
+          </el-button>
         </div>
 
         <div v-loading="loading" class="feed">
-          <el-card v-for="c in list" :key="c.id" class="item-card" shadow="hover">
-            <div class="item-body" @click="toDetail(c.id)">
+          <el-card
+            v-for="c in list"
+            :key="c.id"
+            class="item-card"
+            :class="{ selected: managing && isSelected(c.id) }"
+            shadow="hover"
+          >
+            <!-- 管理模式：卡片左侧显示勾选框 -->
+            <el-checkbox
+              v-if="managing"
+              :model-value="isSelected(c.id)"
+              class="pick"
+              @change="toggleSelect(c.id)"
+            />
+            <div
+              class="item-body"
+              @click="managing ? toggleSelect(c.id) : toDetail(c.id)"
+            >
               <div class="badge">
                 <el-tag :type="TYPE_MAP[c.type]?.tagType || 'info'" size="small">
                   {{ TYPE_MAP[c.type]?.label || c.type }}
@@ -184,7 +255,7 @@ onMounted(() => {
 
             <el-image v-if="firstImage(c)" :src="firstImage(c)" fit="cover" class="thumb" />
 
-            <div class="actions">
+            <div class="actions" v-if="!managing">
               <el-button size="small" type="primary" plain @click="toEdit(c.id)">编辑</el-button>
               <el-button size="small" type="danger" plain @click="removeItem(c.id, c.title)">删除</el-button>
             </div>
@@ -204,6 +275,20 @@ onMounted(() => {
             :current-page="page"
             @current-change="(p) => ((page = p), load())"
           />
+        </div>
+
+        <!-- 批量管理底部操作栏 -->
+        <div v-if="managing && list.length" class="batch-bar">
+          <el-checkbox
+            :model-value="selected.length === list.length && list.length > 0"
+            @change="selectAll"
+          >
+            全选本页
+          </el-checkbox>
+          <span class="batch-count">已选 {{ selected.length }} 条</span>
+          <el-button size="small" type="danger" :disabled="!selected.length" @click="removeSelected">
+            批量删除
+          </el-button>
         </div>
       </el-tab-pane>
 
@@ -281,6 +366,32 @@ onMounted(() => {
   margin-top: 4px;
   font-size: 13px;
   color: #909399;
+}
+
+/* 批量管理 */
+.item-card.selected {
+  border-color: #409eff;
+  box-shadow: 0 0 0 1px #409eff inset;
+}
+
+.item-card .pick {
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: #f7f8fa;
+  border-radius: 10px;
+}
+
+.batch-count {
+  color: #909399;
+  font-size: 13px;
 }
 
 .head {
