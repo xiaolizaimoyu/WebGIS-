@@ -184,7 +184,7 @@ onMounted(() => {
           @click="toDetail(g.id)"
         >
           <div class="goods-image">
-            <img :src="resolveGoodsImage(g.image)" :alt="g.name" class="goods-cover" @error="onImgError" />
+            <img :src="resolveGoodsImage(g.image)" :alt="g.name || '积分商品'" loading="lazy" decoding="async" class="goods-cover" @error="onImgError" />
             <div v-if="g.tags && g.tags.length" class="goods-tags">
               <el-tag
                 v-for="t in g.tags.slice(0, 2)"
@@ -212,7 +212,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <el-empty v-if="!loading && !list.length" description="暂无商品" :image-size="100" />
+        <el-empty v-if="!loading && !list.length" description="暂无商品" :image-size="100" aria-live="polite" />
       </div>
 
       <div v-if="total > size" class="pager">
