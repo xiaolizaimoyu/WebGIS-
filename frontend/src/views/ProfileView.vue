@@ -124,6 +124,8 @@ async function handleSign() {
         <div class="card-head">
           <span>个人资料</span>
           <el-button type="primary" plain size="small" @click="router.push('/mine')">📝 我的发布</el-button>
+            <el-button plain size="small" @click="router.push('/social?tab=likes')">👍 我的点赞</el-button>
+            <el-button plain size="small" @click="router.push('/social?tab=favorites')">⭐ 我的收藏</el-button>
         </div>
       </template>
       <div class="profile-head">
