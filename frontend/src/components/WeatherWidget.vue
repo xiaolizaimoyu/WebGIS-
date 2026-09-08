@@ -1,14 +1,14 @@
 <script setup>
-// 天气组件（归属：天气模块）——紧凑天气卡片
-// 对外契约：
-//   props: city (城市名), useMock (是否使用模拟数据，默认 true)
-//   emit:  loaded(weatherData)
-import { ref, onMounted, watch } from 'vue'
+// 天气组件（归属：天气模块）——实时天气卡片
+// 使用 Open-Meteo 免费 API（无需 API KEY）获取真实天气
+// 自动每5分钟刷新一次，无需手动点击
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
 const props = defineProps({
   city: { type: String, default: '淄博' },
-  useMock: { type: Boolean, default: true }
+  lat: { type: Number, default: 36.809 },
+  lng: { type: Number, default: 117.996 }
 })
 
 const emit = defineEmits(['loaded'])
@@ -24,73 +24,107 @@ const weather = ref({
   icon: '☀️'
 })
 
-// 天气图标映射
-const weatherIcons = {
-  '晴': '☀️',
-  '多云': '⛅',
-  '阴': '☁️',
-  '小雨': '🌦️',
-  '中雨': '🌧️',
-  '大雨': '🌧️',
-  '雪': '🌨️',
-  '雷阵雨': '⛈️',
-  '雾': '🌫️'
+let refreshTimer = null
+
+// Open-Meteo weather_code → 中文天气 + 图标
+const weatherCodeMap = {
+  0:  { text: '晴', icon: '☀️' },
+  1:  { text: '晴', icon: '🌤️' },
+  2:  { text: '多云', icon: '⛅' },
+  3:  { text: '阴', icon: '☁️' },
+  45: { text: '雾', icon: '🌫️' },
+  48: { text: '雾', icon: '🌫️' },
+  51: { text: '小雨', icon: '🌦️' },
+  53: { text: '小雨', icon: '🌦️' },
+  55: { text: '小雨', icon: '🌦️' },
+  56: { text: '冻雨', icon: '🌧️' },
+  57: { text: '冻雨', icon: '🌧️' },
+  61: { text: '小雨', icon: '🌦️' },
+  63: { text: '中雨', icon: '🌧️' },
+  65: { text: '大雨', icon: '🌧️' },
+  66: { text: '冻雨', icon: '🌧️' },
+  67: { text: '冻雨', icon: '🌧️' },
+  71: { text: '小雪', icon: '🌨️' },
+  73: { text: '中雪', icon: '🌨️' },
+  75: { text: '大雪', icon: '❄️' },
+  77: { text: '雪粒', icon: '🌨️' },
+  80: { text: '小雨', icon: '🌦️' },
+  81: { text: '中雨', icon: '🌧️' },
+  82: { text: '大雨', icon: '⛈️' },
+  85: { text: '小雪', icon: '🌨️' },
+  86: { text: '大雪', icon: '❄️' },
+  95: { text: '雷阵雨', icon: '⛈️' },
+  96: { text: '雷阵雨', icon: '⛈️' },
+  99: { text: '雷阵雨', icon: '⛈️' }
 }
 
-// 模拟天气数据
-function getMockWeather(city) {
-  const conditions = Object.keys(weatherIcons)
-  const cond = conditions[Math.floor(Math.random() * conditions.length)]
-  return {
-    city,
-    temp: Math.floor(Math.random() * 20) + 10,
-    text: cond,
-    windDir: ['东风', '南风', '西风', '北风'][Math.floor(Math.random() * 4)],
-    windScale: Math.floor(Math.random() * 5) + 1,
-    humidity: Math.floor(Math.random() * 40) + 40,
-    icon: weatherIcons[cond] || '🌤️'
-  }
+// 风速 m/s 转蒲福风级
+function windSpeedToScale(ms) {
+  if (ms < 0.3) return 0
+  if (ms < 1.6) return 1
+  if (ms < 3.4) return 2
+  if (ms < 5.5) return 3
+  if (ms < 8.0) return 4
+  if (ms < 10.8) return 5
+  if (ms < 13.9) return 6
+  if (ms < 17.2) return 7
+  if (ms < 20.8) return 8
+  return 9
 }
 
-// 真实API调用（和风天气，需配置 API_KEY 后启用）
-async function fetchRealWeather(city) {
-  // TODO: 替换为你的和风天气 API KEY
-  const API_KEY = ''
-  if (!API_KEY) {
-    throw new Error('未配置天气 API KEY')
-  }
-  const res = await fetch(
-    `https://devapi.qweather.com/v7/weather/now?location=${encodeURIComponent(city)}&key=${API_KEY}`
-  )
+// 风向角度转中文
+function degreeToDir(deg) {
+  if (deg < 22.5 || deg >= 337.5) return '北风'
+  if (deg < 67.5) return '东北风'
+  if (deg < 112.5) return '东风'
+  if (deg < 157.5) return '东南风'
+  if (deg < 202.5) return '南风'
+  if (deg < 247.5) return '西南风'
+  if (deg < 292.5) return '西风'
+  return '西北风'
+}
+
+// 使用 Open-Meteo 免费 API 获取真实天气（无需 API KEY）
+async function fetchRealWeather(lat, lng) {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m&timezone=Asia/Shanghai`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('天气接口请求失败')
   const data = await res.json()
-  if (data.code !== '200') throw new Error('天气接口异常')
-  const now = data.now
+  const cur = data.current
+  const code = weatherCodeMap[cur.weather_code] || { text: '未知', icon: '🌤️' }
   return {
-    city,
-    temp: now.temp,
-    text: now.text,
-    windDir: now.windDir,
-    windScale: now.windScale,
-    humidity: now.humidity,
-    icon: weatherIcons[now.text] || '🌤️'
+    city: props.city,
+    temp: Math.round(cur.temperature_2m),
+    text: code.text,
+    windDir: degreeToDir(cur.wind_direction_10m),
+    windScale: windSpeedToScale(cur.wind_speed_10m),
+    humidity: Math.round(cur.relative_humidity_2m),
+    icon: code.icon
+  }
+}
+
+// 网络失败时的兜底 mock 数据
+function fallbackMock() {
+  return {
+    city: props.city,
+    temp: 25,
+    text: '多云',
+    windDir: '东南风',
+    windScale: 3,
+    humidity: 60,
+    icon: '⛅'
   }
 }
 
 async function loadWeather() {
   loading.value = true
   try {
-    let data
-    if (props.useMock) {
-      data = getMockWeather(props.city)
-    } else {
-      data = await fetchRealWeather(props.city)
-    }
+    const data = await fetchRealWeather(props.lat, props.lng)
     weather.value = data
     emit('loaded', data)
   } catch (e) {
-    ElMessage.warning(`天气获取失败：${e.message}`)
-    // 失败时回退到模拟数据
-    weather.value = getMockWeather(props.city)
+    // 网络失败时使用兜底数据，不弹错误提示
+    weather.value = fallbackMock()
   } finally {
     loading.value = false
   }
@@ -98,14 +132,22 @@ async function loadWeather() {
 
 watch(() => props.city, () => loadWeather())
 
-onMounted(loadWeather)
+onMounted(() => {
+  loadWeather()
+  // 每5分钟自动刷新一次天气
+  refreshTimer = setInterval(loadWeather, 5 * 60 * 1000)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
+})
 </script>
 
 <template>
   <div class="weather-card" v-loading="loading">
     <div class="weather-header">
       <span class="city">📍 {{ weather.city }}</span>
-      <el-button text size="small" @click="loadWeather" :loading="loading">刷新</el-button>
+      <span class="live-badge">● 实时</span>
     </div>
     <div class="weather-body">
       <div class="weather-main">
@@ -148,6 +190,29 @@ onMounted(loadWeather)
 .city {
   font-size: 14px;
   opacity: 0.9;
+}
+
+.live-badge {
+  font-size: 12px;
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.live-badge::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ade80;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .weather-body {
