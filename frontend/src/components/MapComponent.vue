@@ -18,7 +18,7 @@ import { fromLonLat, toLonLat } from 'ol/proj'
 import 'ol/ol.css'
 
 const props = defineProps({
-  center: { type: Array, default: () => [116.397428, 39.90923] }, // 默认北京
+  center: { type: Array, default: () => [117.996, 36.809] }, // 默认山东理工大学西校区
   zoom: { type: Number, default: 12 },
   markers: { type: Array, default: () => [] },
   height: { type: String, default: '100%' }

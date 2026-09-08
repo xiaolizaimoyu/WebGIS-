@@ -7,7 +7,7 @@ import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
 const props = defineProps({
-  city: { type: String, default: '北京' },
+  city: { type: String, default: '淄博' },
   useMock: { type: Boolean, default: true }
 })
 
