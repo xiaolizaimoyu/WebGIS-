@@ -18,8 +18,9 @@ const userPoints = computed(() => store.signStatus?.totalPoints || 0)
 
 const statusMap = {
   pending: { label: '待发货', type: 'warning', icon: '⏳' },
+  processed: { label: '已完成', type: 'success', icon: '✅' },
   shipping: { label: '配送中', type: 'primary', icon: '🚚' },
-  delivered: { label: '已完成', type: 'success', icon: '✅' },
+  delivered: { label: '已送达', type: 'success', icon: '📦' },
   cancelled: { label: '已取消', type: 'info', icon: '❌' }
 }
 
