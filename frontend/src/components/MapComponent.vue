@@ -193,7 +193,7 @@ defineExpose({
   },
   fitToMarkers: () => {
     if (!olMap || !vectorSource || vectorSource.getFeatures().length === 0) return
-    olMap.getView().fit(vectorSource.getExtent(), { padding: [40, 40, 40, 40], maxZoom: 15 })
+    olMap.getView().fit(vectorSource.getExtent(), { padding: [50, 50, 50, 50], maxZoom: 16 })
   },
   highlightMarker: (id) => {
     if (!vectorSource) return

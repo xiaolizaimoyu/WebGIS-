@@ -133,6 +133,7 @@ function onPageShow(e) {
 
 onMounted(() => {
   load()
+  loadMapPoints()
   window.addEventListener('pageshow', onPageShow)
 })
 
@@ -172,16 +173,23 @@ function coordinate(value) {
 }
 
 // 从内容列表提取地图标记点（带坐标的内容）
-const mapMarkers = computed(() =>
-  list.value
-    .filter((c) => c.longitude && c.latitude)
-    .map((c) => ({
+// 地图点位：独立加载全站绑定了真实地点的帖子（has_location=true），
+// 不依赖当前页列表，保证首页地图点位完整落在校园真实位置
+const mapMarkers = ref([])
+async function loadMapPoints() {
+  try {
+    const data = await postApi.listContents({ has_location: true, page: 1, size: 50 })
+    const items = Array.isArray(data) ? data : (data.items || [])
+    mapMarkers.value = items.map((c) => ({
       id: c.id,
       lng: c.longitude,
       lat: c.latitude,
-      title: c.title
+      title: c.title + (c.location_name ? ' @' + c.location_name : '')
     }))
-)
+  } catch {
+    // 点位加载失败不阻塞页面，地图保持校园中心
+  }
+}
 
 const hasMapData = computed(() => mapMarkers.value.length > 0)
 
