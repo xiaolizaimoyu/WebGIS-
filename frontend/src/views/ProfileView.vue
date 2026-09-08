@@ -101,7 +101,8 @@ async function savePassword() {
 const totalPoints = computed(() => store.signStatus?.totalPoints || 0)
 const continuousDays = computed(() => store.signStatus?.continuousDays || 0)
 const signedToday = computed(() => store.signStatus?.signedToday || false)
-const signRecords = computed(() => store.signStatus?.signRecords || [])
+// store 中字段名为 recentRecords（后端 recent_records 转换而来），此前误读 signRecords 导致签到记录一直空白
+const signRecords = computed(() => store.signStatus?.recentRecords || [])
 
 async function handleSign() {
   if (signedToday.value) {
