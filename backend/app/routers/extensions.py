@@ -99,7 +99,7 @@ def list_answers(qid: int):
 def create_question(data: dict, user: User = Depends(get_current_user)):
     new_id = max(q["id"] for q in _questions) + 1
     q = {"id": new_id, "title": data.get("title", ""), "body": data.get("body", ""),
-         "tag": data.get("tag", "求助"), "author_name": user.nickname,
+         "tag": data.get("tag", "求助"), "author_id": user.id, "author_name": user.nickname,
          "view_count": 0, "answer_count": 0, "solved": False,
          "created_at": datetime.now().isoformat()}
     _questions.append(q)
@@ -111,10 +111,31 @@ def create_answer(qid: int, data: dict, user: User = Depends(get_current_user)):
     if qid not in _answers:
         _answers[qid] = []
     new_id = max((a["id"] for answers in _answers.values() for a in answers), default=0) + 1
-    a = {"id": new_id, "question_id": qid, "author_name": user.nickname,
+    a = {"id": new_id, "question_id": qid, "author_id": user.id, "author_name": user.nickname,
          "body": data.get("body", ""), "adopted": False, "created_at": datetime.now().isoformat()}
     _answers[qid].append(a)
     return ok(a, "回答成功")
+
+
+@router.post("/questions/{qid}/answers/{aid}/adopt", summary="采纳答案（仅问题作者）")
+def adopt_answer(qid: int, aid: int, user: User = Depends(get_current_user)):
+    q = next((q for q in _questions if q["id"] == qid), None)
+    if not q:
+        from app.core.response import BizError
+        raise BizError(404, "问题不存在")
+    if q.get("author_id") != user.id:
+        from app.core.response import BizError
+        raise BizError(403, "只有问题作者才能采纳答案")
+    answers = _answers.get(qid, [])
+    a = next((x for x in answers if x["id"] == aid), None)
+    if not a:
+        from app.core.response import BizError
+        raise BizError(404, "答案不存在")
+    # 取消其它答案的采纳标记，目标答案设为已采纳
+    for x in answers:
+        x["adopted"] = (x["id"] == aid)
+    q["solved"] = True
+    return ok({"solved": True, "adopted": True, "answer_id": aid})
 
 
 # ==================== 学习资料 ====================

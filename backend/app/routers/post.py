@@ -183,6 +183,7 @@ def content_to_dict(content: Content, author_name: str, comment_count: int = 0, 
         "author_name": author_name,
         "comment_count": comment_count,
         "view_count": content.view_count,
+        "like_count": content.like_count,
         "created_at": content.created_at,
     }
     # 详情接口可选鉴权时传入，前端据此决定是否显示编辑/删除按钮

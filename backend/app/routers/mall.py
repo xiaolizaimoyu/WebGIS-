@@ -4,7 +4,7 @@
 前缀：/api/mall
 """
 from fastapi import APIRouter, Depends, Query
-from sqlmodel import Session, select
+from sqlmodel import Session, select, or_
 
 from app.core.response import BizError, ok
 from app.core.security import get_current_user
@@ -19,10 +19,16 @@ router = APIRouter(prefix="/api/mall", tags=["积分商城"])
 @router.get("/goods", summary="商品列表")
 def list_goods(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100),
                category: str = Query(None),
+               keyword: str = Query(None, description="按名称/描述/分类模糊搜索"),
                session: Session = Depends(get_session)):
     stmt = select(MallGoods).where(MallGoods.status == "on").order_by(MallGoods.points_price.asc())
     if category:
         stmt = stmt.where(MallGoods.category == category)
+    if keyword:
+        like = f"%{keyword.strip()}%"
+        stmt = stmt.where(or_(MallGoods.name.like(like),
+                              MallGoods.description.like(like),
+                              MallGoods.category.like(like)))
     total = len(session.exec(stmt).all())
     items = session.exec(stmt.offset((page - 1) * size).limit(size)).all()
     return ok({"total": total, "page": page, "size": size,
