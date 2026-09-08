@@ -58,7 +58,7 @@ function toDetail(id) {
 }
 
 // 右侧地图
-const mapCenter = ref([116.397428, 39.90923])
+const mapCenter = ref([117.996, 36.809])
 const mapMarkers = computed(() => [])
 
 onMounted(load)
@@ -136,7 +136,7 @@ onMounted(load)
 
     <!-- 右侧：地图 + 天气 -->
     <div class="right-panel">
-      <WeatherWidget city="北京" :use-mock="true" />
+      <WeatherWidget city="淄博" :use-mock="true" />
       <div class="map-wrapper">
         <div class="map-header">
           <span class="map-title">🗺️ 校园地图</span>

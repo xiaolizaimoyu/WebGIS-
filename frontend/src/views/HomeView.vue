@@ -60,7 +60,7 @@ function firstImage(item) {
 }
 
 // ====== 右侧地图（前端 A 组件整合） ======
-const mapCenter = ref([116.397428, 39.90923])
+const mapCenter = ref([117.996, 36.809])
 const mapZoom = ref(12)
 
 // 从内容列表提取地图标记点（带坐标的内容）
@@ -166,7 +166,7 @@ onMounted(load)
 
     <!-- 右侧：地图 + 天气 -->
     <div class="right-panel">
-      <WeatherWidget city="北京" :use-mock="true" />
+      <WeatherWidget city="淄博" :use-mock="true" />
 
       <div class="map-wrapper">
         <div class="map-header">

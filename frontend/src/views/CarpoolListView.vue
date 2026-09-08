@@ -30,7 +30,7 @@ function toDetail(id) {
   router.push(`/carpool/${id}`)
 }
 
-const mapCenter = ref([116.397428, 39.90923])
+const mapCenter = ref([117.996, 36.809])
 const mapMarkers = computed(() => [])
 
 onMounted(load)
@@ -86,7 +86,7 @@ onMounted(load)
     </div>
 
     <div class="right-panel">
-      <WeatherWidget city="北京" :use-mock="true" />
+      <WeatherWidget city="淄博" :use-mock="true" />
       <div class="map-wrapper">
         <div class="map-header"><span class="map-title">🗺️ 路线地图</span></div>
         <MapComponent ref="mapRef" :center="mapCenter" :zoom="12" :markers="mapMarkers" height="360px" />
