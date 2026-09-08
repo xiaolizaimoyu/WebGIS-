@@ -189,7 +189,8 @@ class Order(SQLModel, table=True):
     goods_id: int = Field(foreign_key="mall_goods.id", index=True)
     goods_name: str = Field(description="兑换时商品名称快照")
     points_cost: int = Field(description="消耗积分")
-    status: str = Field(default="pending", description="订单状态：pending=待处理，processed=已完成，cancelled=已取消")
+    quantity: int = Field(default=1, description="兑换数量")
+    status: str = Field(default="pending", description="订单状态：pending=待发货，shipping=配送中，delivered=已送达，cancelled=已取消")
     created_at: datetime = Field(default_factory=datetime.now)
 
 

@@ -50,32 +50,35 @@ def get_goods(goods_id: int, session: Session = Depends(get_session)):
 # ==================== 订单 ====================
 
 @router.post("/exchange/{goods_id}", summary="用积分兑换商品")
-def exchange_goods(goods_id: int, user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+def exchange_goods(goods_id: int,
+                   quantity: int = Query(1, ge=1, le=10, description="兑换数量"),
+                   user: User = Depends(get_current_user),
+                   session: Session = Depends(get_session)):
     goods = session.get(MallGoods, goods_id)
     if not goods or goods.status != "on":
         raise BizError(404, "商品不存在或已下架")
-    if goods.stock == 0:
-        raise BizError(400, "商品已兑完")
-    if user.points < goods.points_price:
-        raise BizError(400, f"积分不足，需要 {goods.points_price} 积分，当前 {user.points} 积分")
+    if goods.stock < quantity:
+        raise BizError(400, f"库存不足，当前仅剩 {goods.stock} 件")
+    total_cost = goods.points_price * quantity
+    if user.points < total_cost:
+        raise BizError(400, f"积分不足，需要 {total_cost} 积分，当前 {user.points} 积分")
 
     # 扣减积分
     balance_before = user.points
-    user.points -= goods.points_price
+    user.points -= total_cost
     session.add(user)
 
     # 扣减库存
-    if goods.stock > 0:
-        goods.stock -= 1
-        session.add(goods)
+    goods.stock -= quantity
+    session.add(goods)
 
-    # 创建订单
+    # 创建订单（pending=待发货）
     order = Order(user_id=user.id, goods_id=goods.id, goods_name=goods.name,
-                  points_cost=goods.points_price, status="processed")
+                  points_cost=total_cost, quantity=quantity, status="pending")
     session.add(order)
 
     # 积分流水
-    log = PointsLog(user_id=user.id, change=-goods.points_price,
+    log = PointsLog(user_id=user.id, change=-total_cost,
                     balance_before=balance_before, balance_after=user.points,
                     reason="exchange")
     session.add(log)
@@ -83,7 +86,8 @@ def exchange_goods(goods_id: int, user: User = Depends(get_current_user), sessio
     session.commit()
     session.refresh(order)
     return ok({"order_id": order.id, "goods_name": goods.name,
-               "points_cost": goods.points_price, "remaining_points": user.points})
+               "points_cost": total_cost, "quantity": quantity,
+               "remaining_points": user.points})
 
 
 @router.get("/orders/mine", summary="我的兑换订单")
@@ -101,7 +105,8 @@ def my_orders(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100),
     return ok({"total": total, "page": page, "size": size,
                "items": [{"id": o.id, "goods_id": o.goods_id, "goods_name": o.goods_name,
                           "goods_image": goods_map.get(o.goods_id).image if goods_map.get(o.goods_id) else None,
-                          "points_cost": o.points_cost, "status": o.status,
+                          "points_cost": o.points_cost, "quantity": getattr(o, "quantity", 1),
+                          "status": o.status,
                           "created_at": o.created_at.isoformat()} for o in items]})
 
 

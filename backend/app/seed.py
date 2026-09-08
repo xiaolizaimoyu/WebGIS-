@@ -378,24 +378,7 @@ def run(reset: bool = False) -> None:
         for g in goods_list:
             session.refresh(g)
 
-        # 11) 演示兑换订单（用户0兑换第1、2个商品）
-        for i in range(2):
-            g = goods_list[i]
-            order = Order(user_id=users[0].id, goods_id=g.id, goods_name=g.name,
-                          points_cost=g.points_price, status="processed",
-                          created_at=now - timedelta(days=i + 1))
-            session.add(order)
-            # 扣减积分流水
-            session.add(PointsLog(
-                user_id=users[0].id, change=-g.points_price,
-                balance_before=users[0].points + g.points_price,
-                balance_after=users[0].points,
-                reason="exchange",
-                created_at=now - timedelta(days=i + 1),
-            ))
-        session.commit()
-
-        # 12) 演示通知（每个用户2条：1条系统通知，1条评论通知）
+                # 12) 演示通知（每个用户2条：1条系统通知，1条评论通知）
         for u in users:
             session.add(Notification(
                 user_id=u.id, type="system",
