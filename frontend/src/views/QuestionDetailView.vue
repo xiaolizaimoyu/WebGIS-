@@ -1,6 +1,6 @@
 <script setup>
 // 问答详情页（归属：前端 C）——问题详情 + 回答列表 + 发表回答
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as questionApi from '@/api/question'
@@ -28,7 +28,9 @@ async function loadDetail() {
 
 async function loadAnswers() {
   try {
-    answers.value = await questionApi.listAnswers(questionId)
+    const data = await questionApi.listAnswers(questionId)
+    // 后端返回 { items: [...] }，必须取 items 数组
+    answers.value = data?.items || (Array.isArray(data) ? data : [])
   } catch {
     answers.value = getMockAnswers(questionId)
   }
@@ -67,15 +69,19 @@ async function sendAnswer() {
   }
 }
 
+// 只有问题作者能采纳（后端 author_id 校验）
+const isAuthor = computed(() => question.value?.author_id === store.userInfo?.id)
+
 async function adoptAnswer(answerId) {
   try {
     await questionApi.adoptAnswer(questionId, answerId)
     ElMessage.success('已采纳该回答')
-  } catch {
-    // mock
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '只有问题作者才能采纳答案')
+    return
   }
   answers.value.forEach((a) => (a.adopted = a.id === answerId))
-  if (question.value) question.value.adopted = true
+  if (question.value) question.value.solved = true
 }
 
 onMounted(() => {
@@ -89,7 +95,7 @@ onMounted(() => {
     <el-card shadow="never" class="detail-card">
       <div class="head">
         <el-tag type="warning" size="small">{{ question.tag }}</el-tag>
-        <el-tag v-if="question.adopted" type="success" effect="dark" size="small">已解决</el-tag>
+        <el-tag v-if="question.solved" type="success" effect="dark" size="small">已解决</el-tag>
         <span class="meta">
           {{ question.author_name }} 提问于 {{ formatTime(question.created_at) }}
         </span>
@@ -133,7 +139,7 @@ onMounted(() => {
           <div class="answer-actions">
             <el-button text size="small" @click="a.likes++">👍 {{ a.likes }}</el-button>
             <el-button
-              v-if="!a.adopted && !question.adopted"
+              v-if="isAuthor && !a.adopted && !question.solved"
               text
               type="success"
               size="small"
