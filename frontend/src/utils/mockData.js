@@ -7,24 +7,24 @@ const hour = 3600000
 export function getMockContents() {
   return [
     {
-      id: 1, title: '篮球友谊赛报名中', body: '本周六下午3点，校体育馆篮球场，欢迎各位篮球爱好者踊跃报名参加！',
+      id: 1, title: '篮球友谊赛报名中', body: '本周六下午3点，校西校区体育馆篮球场，欢迎各位篮球爱好者踊跃报名参加！',
       type: 'activity', category: '体育', author_name: '体育部', created_at: now - 1 * day,
-      lng: 116.397428, lat: 39.90923, images: []
+      lng: 117.996, lat: 36.809, images: []
     },
     {
       id: 2, title: '校园歌手大赛海选', body: '一年一度的校园歌手大赛开始啦，报名截止本周五，快来展现你的歌喉！',
       type: 'activity', category: '文艺', author_name: '文艺部', created_at: now - 2 * day,
-      lng: 116.407428, lat: 39.91923, images: []
+      lng: 118.001, lat: 36.813, images: []
     },
     {
       id: 3, title: '招聘暑期实习', body: '互联网公司暑期实习招聘，前端/后端/产品多岗位，欢迎投递简历。',
       type: 'news', category: '招聘', author_name: '就业办', created_at: now - 3 * day,
-      lng: 116.387428, lat: 39.89923, images: []
+      lng: 117.992, lat: 36.806, images: []
     },
     {
-      id: 4, title: '图书馆延长开放通知', body: '期末考试将至，图书馆开放时间延长至晚11点，请同学们合理安排复习时间。',
+      id: 4, title: '图书馆延长开放通知', body: '期末考试将至，西校区图书馆开放时间延长至晚11点，请同学们合理安排复习时间。',
       type: 'news', category: '通知', author_name: '图书馆', created_at: now - 4 * day,
-      lng: 116.392428, lat: 39.90423, images: []
+      lng: 117.994, lat: 36.811, images: []
     }
   ]
 }
@@ -135,8 +135,8 @@ export function getMockCarpools() {
       created_at: now - 1 * day, status: 'recruiting'
     },
     {
-      id: 3, title: '去高铁站拼车（随时出发）', from: '学校北门', to: '北京南站', depart_time: '2026-09-05 15:00',
-      return_time: '', seats_total: 4, seats_left: 3, price_per_person: 50,
+      id: 3, title: '去高铁站拼车（随时出发）', from: '学校北门', to: '淄博北站', depart_time: '2026-09-05 15:00',
+      return_time: '', seats_total: 4, seats_left: 3, price_per_person: 20,
       author_name: '顺风车', author_avatar: '', phone: '137****7777', note: '今天下午3点出发，赶高铁的同学速来！',
       created_at: now - 30 * 60000, status: 'recruiting'
     }
