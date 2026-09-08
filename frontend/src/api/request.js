@@ -43,10 +43,16 @@ request.interceptors.response.use(
     return Promise.reject(new Error(body?.msg || '请求失败'))
   },
   (error) => {
+    const status = error.response?.status
     const body = error.response?.data
+    // 404：后端接口尚未实现（新模块待后端对接），不弹全局错误，由各页面 catch 后使用 mock 数据兜底
+    if (status === 404) {
+      return Promise.reject(error)
+    }
     if (body && body.code !== undefined) {
       dealError(body.code, body.msg)
-    } else {
+    } else if (error.code === 'ERR_NETWORK' || !error.response) {
+      // 真正的网络错误（后端未启动）才提示
       ElMessage.error('网络连接失败，请确认后端服务已启动')
     }
     return Promise.reject(error)
