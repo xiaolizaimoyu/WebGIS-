@@ -149,7 +149,7 @@ onMounted(load)
     </div>
 
     <div class="right-panel">
-      <WeatherWidget city="淄博" :use-mock="true" />
+      <WeatherWidget city="淄博" />
       <div class="map-wrapper">
         <div class="map-header">
           <span class="map-title">🗺️ 校园地图</span>

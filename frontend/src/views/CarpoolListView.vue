@@ -86,7 +86,7 @@ onMounted(load)
     </div>
 
     <div class="right-panel">
-      <WeatherWidget city="淄博" :use-mock="true" />
+      <WeatherWidget city="淄博" />
       <div class="map-wrapper">
         <div class="map-header"><span class="map-title">🗺️ 路线地图</span></div>
         <MapComponent ref="mapRef" :center="mapCenter" :zoom="12" :markers="mapMarkers" height="360px" />
