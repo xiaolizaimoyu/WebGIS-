@@ -3,19 +3,23 @@
 // - 无 :id 路由 = 新建发布
 // - 带 :id 路由（/publish/:id）＝ 编辑已有内容（仅作者可进入，编辑由后端校验权限）
 // 说明：本路由 requiresAuth，未登录会被全局守卫拦截到登录页
-// TODO(前端B)：草稿、富文本编辑器、发布后二次编辑预览等扩展点
+// TODO(前端B)：富文本编辑器、发布后二次编辑预览等扩展点
+// 地点：可选校园地点（如 二餐）自动定位，也可在地图上手动点击拾取精确位置
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as postApi from '@/api/post'
 import LocationPicker from '@/components/map/LocationPicker.vue' // 前端A的Leaflet选点组件（免key）
+import { CAMPUS_PLACES } from '@/api/const'
 
 const route = useRoute()
 const router = useRouter()
 const formRef = ref()
 const submitting = ref(false)
 
-// 编辑模式：/publish/:id 存在 id 即为编辑
+// 校园地点选项（真实校园位置：如 二餐 → 自动定位到第二食堂坐标）
+const placeOptions = CAMPUS_PLACES.map((p) => ({ value: p.name, lng: p.lng, lat: p.lat, label: p.name }))
+
 const isEdit = computed(() => !!route.params.id)
 const editId = computed(() => (route.params.id ? Number(route.params.id) : null))
 
@@ -24,7 +28,9 @@ const form = reactive({
   body: '',
   type: 'meeting',
   category: '',
-  location: null // 选点结果 { lng, lat } | null；提交时映射为后端的 longitude / latitude
+  longitude: null,
+  latitude: null,
+  location_name: ''
 })
 
 // ===== 草稿自动保存（前端 B，规划书 TODO：草稿箱）=====
@@ -75,29 +81,53 @@ const rules = {
   body: [{ required: true, message: '请输入正文内容', trigger: 'blur' }]
 }
 
-const fileList = ref([]) // el-upload 双向列表；新传成功 file.response={url}；历史图无 response，直接用 file.url
+const fileList = ref([])
 const previewVisible = ref(false)
 const previewUrl = ref('')
 
-// 编辑模式：拉取原内容回填表单与图片（后端返回 longitude / latitude）
+// 编辑模式：回填表单
 async function loadEditing() {
   const data = await postApi.getContent(editId.value)
   form.title = data.title
   form.body = data.body
   form.type = data.type
   form.category = data.category || ''
-  form.location =
-    data.longitude != null && data.latitude != null
-      ? { lng: data.longitude, lat: data.latitude }
-      : null
+  form.longitude = data.longitude ?? null
+  form.latitude = data.latitude ?? null
+  form.location_name = data.location_name || ''
   fileList.value = (data.images || []).map((url) => ({ name: url.split('/').pop(), url }))
+}
+
+// 选择校园地点 → 自动填充坐标
+function onPlaceChange(name) {
+  const p = placeOptions.find((x) => x.value === name)
+  if (!p) return
+  form.location_name = p.value
+  form.longitude = p.lng
+  form.latitude = p.lat
+  ElMessage.success(`已定位到「${p.label}」`)
+}
+
+// LocationPicker 手动选点 → 清除地点名（自定义位置）
+function onManualPick(loc) {
+  if (!loc || loc.lng == null) return
+  form.location_name = ''
+  form.longitude = loc.lng
+  form.latitude = loc.lat
+}
+
+function clearPoint() {
+  form.longitude = null
+  form.latitude = null
+  form.location_name = ''
 }
 
 onMounted(() => {
   if (isEdit.value) loadEditing()
+  else restoreDraft() // 新建模式恢复上次草稿
 })
 
-// 自定义上传：替换默认 xhr，走我们的 /api/upload（已带 Token）
+// 自定义上传：走 /api/upload（已带 Token）
 async function doUpload(options) {
   const data = await postApi.uploadImage(options.file)
   options.onSuccess(data, options.file)
@@ -116,7 +146,6 @@ function onExceed() {
   ElMessage.warning('最多上传 5 张图片')
 }
 
-// 收集待提交图片：新传图用 response.url，历史图用自身 url（相对路径 /uploads/...）
 function collectImages() {
   return fileList.value
     .map((f) => (f.response ? f.response.url : isEdit.value ? f.url : null))
@@ -137,15 +166,15 @@ async function submit() {
       type: form.type,
       category: undefined,
       images: collectImages(),
-      // 选点结果映射为后端字段：longitude / latitude 需成对提交（后端校验）
-      longitude: form.location?.lng ?? null,
-      latitude: form.location?.lat ?? null
+      longitude: form.longitude,
+      latitude: form.latitude,
+      location_name: form.location_name
     }
     let data
     if (isEdit.value) {
       data = await postApi.updateContent(editId.value, payload)
       ElMessage.success('修改成功')
-      router.push('/mine') // 编辑后回到我的发布，列表自动刷新
+      router.push('/mine')
     } else {
       data = await postApi.createContent(payload)
       clearDraft() // 发布成功，草稿使命完成
@@ -167,7 +196,6 @@ async function submit() {
           <el-radio-group v-model="form.type">
             <el-radio-button value="meeting">校园会议</el-radio-button>
             <el-radio-button value="news">校园动态</el-radio-button>
-            <!-- 新增分类（规划书 5-2）：美食分享 / 失物招领 -->
             <el-radio-button value="food">美食分享</el-radio-button>
             <el-radio-button value="lost">失物招领</el-radio-button>
           </el-radio-group>
@@ -192,6 +220,32 @@ async function submit() {
           />
         </el-form-item>
 
+        <el-form-item label="选择地点">
+          <el-select
+            v-model="form.location_name"
+            placeholder="选择校园地点（如 二餐、图书馆），地图自动定位"
+            clearable
+            filterable
+            style="width: 100%"
+            @change="onPlaceChange"
+            @clear="clearPoint"
+          >
+            <el-option v-for="p in placeOptions" :key="p.value" :label="p.label" :value="p.value" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="地图定位">
+          <div class="map-wrap">
+            <LocationPicker
+              :model-value="{ lng: form.longitude, lat: form.latitude }"
+              @update:model-value="onManualPick"
+            />
+            <div class="map-hint">
+              💡 可在上方选择校园地点快速定位，也可直接在地图上点击拾取精确位置
+            </div>
+          </div>
+        </el-form-item>
+
         <el-form-item label="图片">
           <el-upload
             v-model:file-list="fileList"
@@ -204,11 +258,6 @@ async function submit() {
           >
             <div class="upload-tip">＋<br />上传图片</div>
           </el-upload>
-        </el-form-item>
-
-        <!-- 地图选点（前端A的Leaflet组件，点击地图拾取，免key） -->
-        <el-form-item label="地图选点">
-          <LocationPicker v-model="form.location" style="width: 100%" />
         </el-form-item>
 
         <el-form-item>
@@ -231,5 +280,15 @@ async function submit() {
   color: #8c939d;
   font-size: 13px;
   line-height: 1.6;
+}
+
+.map-wrap {
+  width: 100%;
+}
+
+.map-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
 }
 </style>

@@ -22,53 +22,6 @@ const sending = ref(false)
 const loading = ref(true)
 const loadFailed = ref(false)
 
-// 点赞 / 收藏状态（前端 B 对接后端 F 的 /api/social）
-const liked = ref(false)
-const likeCount = ref(0)
-const favorited = ref(false)
-
-// 内容接口暂不返回 like_count，初始以 0 兜底，点赞后用接口返回值更新
-async function loadSocialState() {
-  if (!store.isLoggedIn) return
-  const [likeRes, favRes] = await Promise.all([
-    socialApi.checkLike(contentId).catch(() => ({ liked: false })),
-    socialApi.checkFavorite(contentId).catch(() => ({ favorited: false }))
-  ])
-  liked.value = !!likeRes?.liked
-  favorited.value = !!favRes?.favorited
-}
-
-async function onToggleLike() {
-  if (!store.isLoggedIn) {
-    ElMessage.warning('请先登录后再点赞')
-    router.push({ path: '/login', query: { redirect: route.fullPath } })
-    return
-  }
-  try {
-    const data = await socialApi.toggleLike(contentId)
-    liked.value = !!data.liked
-    likeCount.value = data.like_count ?? likeCount.value
-    ElMessage.success(liked.value ? '已点赞' : '已取消点赞')
-  } catch (e) {
-    // request.js 已弹错误提示
-  }
-}
-
-async function onToggleFavorite() {
-  if (!store.isLoggedIn) {
-    ElMessage.warning('请先登录后再收藏')
-    router.push({ path: '/login', query: { redirect: route.fullPath } })
-    return
-  }
-  try {
-    const data = await socialApi.toggleFavorite(contentId)
-    favorited.value = !!data.favorited
-    ElMessage.success(favorited.value ? '已收藏' : '已取消收藏')
-  } catch (e) {
-    // request.js 已弹错误提示
-  }
-}
-
 async function loadDetail() {
   try {
     content.value = await postApi.getContent(contentId)
@@ -94,7 +47,7 @@ async function loadComments() {
 async function loadAll() {
   loading.value = true
   loadFailed.value = false
-  await Promise.all([loadDetail(), loadComments(), loadSocialState()])
+  await Promise.all([loadDetail(), loadComments()])
   loading.value = false
 }
 
@@ -133,7 +86,68 @@ async function sendComment() {
   }
 }
 
-onMounted(loadAll)
+// ===== 点赞 / 收藏（真实对接后端 social 接口） =====
+const liked = ref(false)
+const favorited = ref(false)
+const liking = ref(false)
+const favoriting = ref(false)
+
+// 登录后拉取当前用户对本文的点赞/收藏状态
+async function loadSocialState() {
+  if (!store.isLoggedIn) return
+  try {
+    const [l, f] = await Promise.all([
+      socialApi.checkLike(contentId),
+      socialApi.checkFavorite(contentId)
+    ])
+    liked.value = !!l?.liked
+    favorited.value = !!f?.favorited
+  } catch {
+    // 状态拉取失败不阻塞页面
+  }
+}
+
+async function toggleLike() {
+  if (!store.isLoggedIn) {
+    ElMessage.warning('请先登录后再点赞')
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  liking.value = true
+  try {
+    const d = await socialApi.toggleLike(contentId)
+    liked.value = !!d?.liked
+    if (content.value) content.value.like_count = d?.like_count ?? content.value.like_count
+    ElMessage.success(d?.liked ? '点赞成功' : '已取消点赞')
+  } catch {
+    ElMessage.error('操作失败，请稍后重试')
+  } finally {
+    liking.value = false
+  }
+}
+
+async function toggleFavorite() {
+  if (!store.isLoggedIn) {
+    ElMessage.warning('请先登录后再收藏')
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  favoriting.value = true
+  try {
+    const d = await socialApi.toggleFavorite(contentId)
+    favorited.value = !!d?.favorited
+    ElMessage.success(d?.favorited ? '收藏成功' : '已取消收藏')
+  } catch {
+    ElMessage.error('操作失败，请稍后重试')
+  } finally {
+    favoriting.value = false
+  }
+}
+
+onMounted(async () => {
+  await loadAll()
+  loadSocialState()
+})
 </script>
 
 <template>
@@ -168,38 +182,6 @@ onMounted(loadAll)
 
         <h1 class="title">{{ content.title }}</h1>
 
-        <!-- 点赞 / 收藏操作栏（前端 B 对接 /api/social） -->
-        <div class="social-bar">
-          <el-button
-            :type="liked ? 'danger' : 'default'"
-            :plain="!liked"
-            round
-            size="small"
-            @click="onToggleLike"
-          >
-            {{ liked ? '❤️' : '🤍' }} 点赞 {{ likeCount > 0 ? likeCount : '' }}
-          </el-button>
-          <el-button
-            :type="favorited ? 'warning' : 'default'"
-            :plain="!favorited"
-            round
-            size="small"
-            @click="onToggleFavorite"
-          >
-            {{ favorited ? '⭐ 已收藏' : '☆ 收藏' }}
-          </el-button>
-          <el-button
-            v-if="content.longitude != null && content.latitude != null"
-            type="primary"
-            plain
-            round
-            size="small"
-            @click="toMapNav"
-          >
-            📍 地图查看 / 导航到这里
-          </el-button>
-        </div>
-
         <div class="body">{{ content.body }}</div>
 
         <div v-if="content.images && content.images.length" class="gallery">
@@ -213,6 +195,33 @@ onMounted(loadAll)
             preview-teleported
             class="gallery-img"
           />
+        </div>
+
+        <!-- 位置信息：有地点名或坐标时展示，可跳首页地图查看 -->
+        <div v-if="content.location_name || (content.longitude != null && content.latitude != null)" class="loc-line">
+          <span class="loc-pin">📍</span>
+          <span class="loc-text">{{ content.location_name || ('经度 ' + content.longitude + '，纬度 ' + content.latitude) }}</span>
+          <el-button size="small" text type="primary" @click="toMapNav">查看地图 →</el-button>
+        </div>
+
+        <!-- 点赞 / 收藏操作条 -->
+        <div class="action-bar">
+          <el-button
+            :type="liked ? 'danger' : 'default'"
+            round
+            :loading="liking"
+            @click="toggleLike"
+          >
+            {{ liked ? '❤️ 已赞' : '🤍 点赞' }} {{ content.like_count || 0 }}
+          </el-button>
+          <el-button
+            :type="favorited ? 'warning' : 'default'"
+            round
+            :loading="favoriting"
+            @click="toggleFavorite"
+          >
+            {{ favorited ? '⭐ 已收藏' : '☆ 收藏' }}
+          </el-button>
         </div>
       </el-card>
 
@@ -297,6 +306,27 @@ onMounted(loadAll)
   word-break: break-word;
 }
 
+.loc-line {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f0f7ff;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.loc-pin {
+  font-size: 14px;
+}
+
+.loc-text {
+  font-size: 13px;
+  color: #1d6df0;
+  flex: 1;
+  min-width: 0;
+}
+
 .nav-line {
   margin-top: 14px;
   display: flex;
@@ -324,6 +354,12 @@ onMounted(loadAll)
   height: 220px;
   border-radius: 8px;
   border: 1px solid #ebeef5;
+}
+
+.action-bar {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
 }
 
 .comment-card {

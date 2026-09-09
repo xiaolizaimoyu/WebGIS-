@@ -46,6 +46,14 @@ function render() {
       fillColor: colorOf(p.type),
       fillOpacity: 0.9
     }).addTo(layer)
+    // 点位常显标签：帖子标题（超出截断），让用户一眼看出点位对应的帖子/地点
+    marker.bindTooltip(p.title, {
+      permanent: true,
+      direction: 'top',
+      offset: [0, -10],
+      opacity: 0.92,
+      className: 'map-tooltip'
+    })
     marker.bindPopup(buildPopupEl(p, (id) => router.push(`/content/${id}`)))
   }
   // 第一次有数据时把视野框到点位上
@@ -102,5 +110,16 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
   padding: 4px 6px;
+}
+
+.map-root :deep(.map-tooltip) {
+  font-size: 11px;
+  color: #303133;
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 </style>

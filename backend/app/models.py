@@ -56,6 +56,7 @@ class Content(SQLModel, table=True):
         description="图片 URL 列表，如 ['/uploads/xxx.png']",
     )
     longitude: Optional[float] = Field(default=None, description="经度，未绑定位置为空")
+    location_name: Optional[str] = Field(default=None, description="地点名称（如 第二食堂），未绑定为空")
     latitude: Optional[float] = Field(default=None, index=True, description="纬度，未绑定位置为空")
     view_count: int = Field(default=0, description="浏览量")
     like_count: int = Field(default=0, description="点赞数（冗余，避免每次 count 查询）")
@@ -188,7 +189,8 @@ class Order(SQLModel, table=True):
     goods_id: int = Field(foreign_key="mall_goods.id", index=True)
     goods_name: str = Field(description="兑换时商品名称快照")
     points_cost: int = Field(description="消耗积分")
-    status: str = Field(default="pending", description="订单状态：pending=待处理，processed=已完成，cancelled=已取消")
+    quantity: int = Field(default=1, description="兑换数量")
+    status: str = Field(default="pending", description="订单状态：pending=待发货，shipping=配送中，delivered=已送达，cancelled=已取消")
     created_at: datetime = Field(default_factory=datetime.now)
 
 

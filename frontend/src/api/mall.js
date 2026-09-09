@@ -10,8 +10,9 @@ export const listCategories = () => request.get('/mall/categories')
 // 商品详情
 export const getGoods = (id) => request.get(`/mall/goods/${id}`)
 
-// 兑换商品（后端按 goods_id 兑换一个，扣积分+减库存+生成订单）
-export const redeemGoods = (id) => request.post(`/mall/exchange/${id}`)
+// 兑换商品（后端按 goods_id + quantity 兑换，扣积分+减库存+生成订单）
+export const redeemGoods = (id, quantity = 1) =>
+  request.post(`/mall/exchange/${id}`, null, { params: { quantity } })
 
 // 我的兑换记录
 export const myRedeemRecords = (params) => request.get('/mall/orders/mine', { params })

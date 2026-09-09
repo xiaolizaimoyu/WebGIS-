@@ -1,10 +1,13 @@
 <script setup>
-// 用户主页（归属：前端 C）——/user/profile/:id，用户信息 + 统计 + 帖子/关注/粉丝 Tab
+// 用户主页（归属：前端 C 改造）——/user/profile/:id
+// 数据全部来自后端真实接口：用户公开信息 / 帖子 / 关注 / 粉丝 / 关注切换
 import { onMounted, ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getMockUserProfile, getMockUserPosts, getMockFollowers, getMockFollowing } from '@/utils/mockData'
+import { ElMessage } from 'element-plus'
 import { formatTime } from '@/api/const'
 import { useUserStore } from '@/stores/user'
+import * as userApi from '@/api/user'
+import * as postApi from '@/api/post'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,19 +20,73 @@ const followers = ref([])
 const following = ref([])
 const activeTab = ref('posts')
 const isFollowing = ref(false)
+const loading = ref(false)
+const followingLoading = ref(false)
 
 const isMe = computed(() => store.userInfo?.id === userId.value)
 
-async function loadData() {
-  // mock 数据
-  user.value = getMockUserProfile(userId.value)
-  posts.value = getMockUserPosts(userId.value)
-  followers.value = getMockFollowers(userId.value)
-  following.value = getMockFollowing(userId.value)
+// 把关注/粉丝的 id 列表批量换成用户信息
+async function resolveUsers(ids) {
+  if (!ids.length) return []
+  const data = await userApi.batchUsers(ids)
+  return (data.list || []).map((u) => ({
+    id: u.id,
+    nickname: u.nickname,
+    avatar: u.avatar,
+    username: u.username
+  }))
 }
 
-function toggleFollow() {
-  isFollowing.value = !isFollowing.value
+async function loadData() {
+  loading.value = true
+  try {
+    const [u, postData, fwData, frData] = await Promise.all([
+      userApi.getUserPublic(userId.value),
+      postApi.listContents({ author_id: userId.value, page: 1, size: 50 }).catch(() => ({ items: [] })),
+      userApi.getFollowing(userId.value).catch(() => ({ items: [] })),
+      userApi.getFollowers(userId.value).catch(() => ({ items: [] }))
+    ])
+    user.value = u
+    posts.value = postData.items || []
+    // 关注/粉丝：先拿 id 列表，再批量查用户信息
+    const fwIds = (fwData.items || []).map((i) => i.following_id)
+    const frIds = (frData.items || []).map((i) => i.follower_id)
+    const [fwUsers, frUsers] = await Promise.all([
+      resolveUsers(fwIds),
+      resolveUsers(frIds)
+    ])
+    following.value = fwUsers
+    followers.value = frUsers
+    // 当前登录用户是否关注了该用户
+    if (store.isLoggedIn && !isMe.value) {
+      const myFw = await userApi.getFollowing(store.userInfo.id).catch(() => ({ items: [] }))
+      isFollowing.value = (myFw.items || []).some((i) => i.following_id === userId.value)
+    }
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '主页数据加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function toggleFollow() {
+  if (!store.isLoggedIn) {
+    ElMessage.warning('请先登录')
+    router.push({ path: '/login', query: { redirect: route.fullPath } })
+    return
+  }
+  followingLoading.value = true
+  try {
+    const data = await userApi.toggleFollow(userId.value)
+    isFollowing.value = !!data.following
+    ElMessage.success(data.following ? '已关注' : '已取消关注')
+    // 刷新粉丝数
+    loadData()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '操作失败')
+  } finally {
+    followingLoading.value = false
+  }
 }
 
 function toPostDetail(id) {
@@ -48,102 +105,107 @@ onMounted(loadData)
 </script>
 
 <template>
-  <div class="user-profile-page" v-if="user">
-    <!-- 用户信息头部 -->
-    <el-card shadow="never" class="header-card">
-      <div class="user-header">
-        <el-avatar :size="90" class="user-avatar">{{ user.nickname.slice(0, 1) }}</el-avatar>
-        <div class="user-info">
-          <div class="name-row">
-            <h2 class="nickname">{{ user.nickname }}</h2>
-            <el-tag v-if="isMe" type="info" size="small">这是我</el-tag>
+  <div class="user-profile-page" v-loading="loading">
+    <template v-if="user">
+      <!-- 用户信息头部 -->
+      <el-card shadow="never" class="header-card">
+        <div class="user-header">
+          <el-avatar :size="90" :src="user.avatar || undefined" class="user-avatar">
+            {{ (user.nickname || '?').slice(0, 1) }}
+          </el-avatar>
+          <div class="user-info">
+            <div class="name-row">
+              <h2 class="nickname">{{ user.nickname }}</h2>
+              <el-tag v-if="isMe" type="info" size="small">这是我</el-tag>
+            </div>
+            <p class="username">@{{ user.username }}</p>
+            <div class="meta-row">
+              <span>📅 加入于 {{ formatTime(user.created_at).slice(0, 10) }}</span>
+            </div>
+            <div class="stats-row">
+              <div class="stat" @click="activeTab = 'posts'">
+                <span class="num">{{ user.content_count || posts.length }}</span>
+                <span class="label">帖子</span>
+              </div>
+              <div class="stat" @click="activeTab = 'following'">
+                <span class="num">{{ following.length }}</span>
+                <span class="label">关注</span>
+              </div>
+              <div class="stat" @click="activeTab = 'followers'">
+                <span class="num">{{ followers.length }}</span>
+                <span class="label">粉丝</span>
+              </div>
+              <div class="stat">
+                <span class="num">{{ user.comment_count || 0 }}</span>
+                <span class="label">评论</span>
+              </div>
+            </div>
           </div>
-          <p class="bio">{{ user.bio }}</p>
-          <div class="meta-row">
-            <span v-if="user.major">🎓 {{ user.major }}</span>
-            <span v-if="user.grade">📚 {{ user.grade }}</span>
-            <span>📅 加入于 {{ formatTime(user.created_at).slice(0, 10) }}</span>
-          </div>
-          <div class="stats-row">
-            <div class="stat" @click="activeTab = 'posts'">
-              <span class="num">{{ user.post_count }}</span>
-              <span class="label">帖子</span>
-            </div>
-            <div class="stat" @click="activeTab = 'following'">
-              <span class="num">{{ user.following_count }}</span>
-              <span class="label">关注</span>
-            </div>
-            <div class="stat" @click="activeTab = 'followers'">
-              <span class="num">{{ user.follower_count }}</span>
-              <span class="label">粉丝</span>
-            </div>
-            <div class="stat">
-              <span class="num">{{ user.likes_received }}</span>
-              <span class="label">获赞</span>
-            </div>
-          </div>
-        </div>
-        <div class="actions" v-if="!isMe">
-          <el-button :type="isFollowing ? 'default' : 'primary'" @click="toggleFollow">
-            {{ isFollowing ? '已关注' : '+ 关注' }}
-          </el-button>
-          <el-button>💬 私信</el-button>
-        </div>
-      </div>
-    </el-card>
-
-    <!-- Tab 内容 -->
-    <el-card shadow="never" class="content-card">
-      <el-tabs v-model="activeTab">
-        <!-- 帖子 Tab -->
-        <el-tab-pane :label="`📝 帖子 (${posts.length})`" name="posts">
-          <div class="posts-list">
-            <el-empty v-if="!posts.length" description="暂无帖子" :image-size="100" />
-            <el-card
-              v-for="p in posts"
-              :key="p.id"
-              class="post-item"
-              shadow="hover"
-              @click="toPostDetail(p.id)"
+          <div class="actions" v-if="!isMe">
+            <el-button
+              :type="isFollowing ? 'default' : 'primary'"
+              :loading="followingLoading"
+              @click="toggleFollow"
             >
-              <h4 class="post-title">{{ p.title }}</h4>
-              <p class="post-summary">{{ p.body }}</p>
-              <div class="post-meta">
-                <span>{{ formatTime(p.created_at) }}</span>
-              </div>
-            </el-card>
+              {{ isFollowing ? '已关注' : '+ 关注' }}
+            </el-button>
           </div>
-        </el-tab-pane>
+        </div>
+      </el-card>
 
-        <!-- 关注 Tab -->
-        <el-tab-pane :label="`👥 关注 (${following.length})`" name="following">
-          <div class="user-list">
-            <el-empty v-if="!following.length" description="暂无关注" :image-size="100" />
-            <div v-for="u in following" :key="u.id" class="user-item" @click="goToUserProfile(u.id)">
-              <el-avatar :size="48">{{ u.nickname.slice(0, 1) }}</el-avatar>
-              <div class="user-item-info">
-                <div class="user-item-name">{{ u.nickname }}</div>
-                <div class="user-item-bio">{{ u.bio || '暂无简介' }}</div>
+      <!-- Tab 内容 -->
+      <el-card shadow="never" class="content-card">
+        <el-tabs v-model="activeTab">
+          <!-- 帖子 Tab -->
+          <el-tab-pane :label="`📝 帖子 (${posts.length})`" name="posts">
+            <div class="posts-list">
+              <el-empty v-if="!posts.length" description="暂无帖子" :image-size="100" />
+              <el-card
+                v-for="p in posts"
+                :key="p.id"
+                class="post-item"
+                shadow="hover"
+                @click="toPostDetail(p.id)"
+              >
+                <h4 class="post-title">{{ p.title }}</h4>
+                <p class="post-summary">{{ p.body }}</p>
+                <div class="post-meta">
+                  <span>{{ formatTime(p.created_at) }}</span>
+                </div>
+              </el-card>
+            </div>
+          </el-tab-pane>
+
+          <!-- 关注 Tab -->
+          <el-tab-pane :label="`👥 关注 (${following.length})`" name="following">
+            <div class="user-list">
+              <el-empty v-if="!following.length" description="暂无关注" :image-size="100" />
+              <div v-for="u in following" :key="u.id" class="user-item" @click="goToUserProfile(u.id)">
+                <el-avatar :size="48" :src="u.avatar || undefined">{{ (u.nickname || '?').slice(0, 1) }}</el-avatar>
+                <div class="user-item-info">
+                  <div class="user-item-name">{{ u.nickname }}</div>
+                  <div class="user-item-bio">@{{ u.username }}</div>
+                </div>
               </div>
             </div>
-          </div>
-        </el-tab-pane>
+          </el-tab-pane>
 
-        <!-- 粉丝 Tab -->
-        <el-tab-pane :label="`❤️ 粉丝 (${followers.length})`" name="followers">
-          <div class="user-list">
-            <el-empty v-if="!followers.length" description="暂无粉丝" :image-size="100" />
-            <div v-for="u in followers" :key="u.id" class="user-item" @click="goToUserProfile(u.id)">
-              <el-avatar :size="48">{{ u.nickname.slice(0, 1) }}</el-avatar>
-              <div class="user-item-info">
-                <div class="user-item-name">{{ u.nickname }}</div>
-                <div class="user-item-bio">{{ u.bio || '暂无简介' }}</div>
+          <!-- 粉丝 Tab -->
+          <el-tab-pane :label="`❤️ 粉丝 (${followers.length})`" name="followers">
+            <div class="user-list">
+              <el-empty v-if="!followers.length" description="暂无粉丝" :image-size="100" />
+              <div v-for="u in followers" :key="u.id" class="user-item" @click="goToUserProfile(u.id)">
+                <el-avatar :size="48" :src="u.avatar || undefined">{{ (u.nickname || '?').slice(0, 1) }}</el-avatar>
+                <div class="user-item-info">
+                  <div class="user-item-name">{{ u.nickname }}</div>
+                  <div class="user-item-bio">@{{ u.username }}</div>
+                </div>
               </div>
             </div>
-          </div>
-        </el-tab-pane>
-      </el-tabs>
-    </el-card>
+          </el-tab-pane>
+        </el-tabs>
+      </el-card>
+    </template>
   </div>
 </template>
 
@@ -152,6 +214,7 @@ onMounted(loadData)
   max-width: 900px;
   margin: 0 auto;
   padding: 20px;
+  min-height: 400px;
 }
 
 .header-card {
@@ -189,7 +252,7 @@ onMounted(loadData)
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .nickname {
@@ -198,10 +261,10 @@ onMounted(loadData)
   margin: 0;
 }
 
-.bio {
-  color: rgba(255,255,255,0.85);
-  font-size: 14px;
-  margin: 0 0 10px 0;
+.username {
+  color: rgba(255,255,255,0.7);
+  font-size: 13px;
+  margin: 0 0 8px 0;
 }
 
 .meta-row {

@@ -101,7 +101,7 @@ async function removeSelected() {
 }
 
 // ===== 我的收藏 =====
-// 接口只返回 content_id，需逐条取详情组装（N+1，待后端提供批量/联表接口后优化）
+// 我的收藏（后端 myFavorites 已返回内容详情：id/title/type/summary/created_at）
 const favList = ref([])
 const favTotal = ref(0)
 const favPage = ref(1)
@@ -110,20 +110,10 @@ const favLoading = ref(false)
 async function loadFavorites() {
   favLoading.value = true
   try {
+    // 后端已返回内容详情（id/title/type/summary/created_at），无需逐条取详情
     const data = await socialApi.myFavorites({ page: favPage.value, size: size.value })
     favTotal.value = data.total
-    const items = await Promise.all(
-      (data.items || []).map(async (f) => {
-        try {
-          // 内容可能已被作者删除：取详情失败则跳过该条
-          const content = await postApi.getContent(f.content_id)
-          return { content, favTime: f.created_at }
-        } catch {
-          return null
-        }
-      })
-    )
-    favList.value = items.filter(Boolean)
+    favList.value = data.items || []
   } finally {
     favLoading.value = false
   }
@@ -136,7 +126,7 @@ function onTabChange(tab) {
 
 async function unfav(item) {
   try {
-    await ElMessageBox.confirm(`确定取消收藏《${item.content.title}》吗？`, '取消收藏', {
+    await ElMessageBox.confirm(`确定取消收藏《${item.title}》吗？`, '取消收藏', {
       type: 'warning',
       confirmButtonText: '取消收藏',
       cancelButtonText: '再想想'
@@ -144,7 +134,7 @@ async function unfav(item) {
   } catch {
     return
   }
-  await socialApi.toggleFavorite(item.content.id)
+  await socialApi.toggleFavorite(item.id)
   ElMessage.success('已取消收藏')
   await loadFavorites()
   loadStats() // 取消收藏后同步统计
@@ -299,19 +289,17 @@ onMounted(() => {
         </div>
 
         <div v-loading="favLoading" class="feed">
-          <el-card v-for="item in favList" :key="item.content.id" class="item-card" shadow="hover">
-            <div class="item-body" @click="toDetail(item.content.id)">
+          <el-card v-for="item in favList" :key="item.id" class="item-card" shadow="hover">
+            <div class="item-body" @click="toDetail(item.id)">
               <div class="badge">
-                <el-tag :type="TYPE_MAP[item.content.type]?.tagType || 'info'" size="small">
-                  {{ TYPE_MAP[item.content.type]?.label || item.content.type }}
+                <el-tag :type="TYPE_MAP[item.type]?.tagType || 'info'" size="small">
+                  {{ TYPE_MAP[item.type]?.label || item.type }}
                 </el-tag>
               </div>
-              <h3 class="title">{{ item.content.title }}</h3>
-              <p class="summary">{{ item.content.body }}</p>
-              <div class="meta">收藏于 {{ formatTime(item.favTime) }}</div>
+              <h3 class="title">{{ item.title }}</h3>
+              <p class="summary">{{ item.summary }}</p>
+              <div class="meta">收藏于 {{ formatTime(item.created_at) }}</div>
             </div>
-
-            <el-image v-if="firstImage(item.content)" :src="firstImage(item.content)" fit="cover" class="thumb" />
 
             <div class="actions">
               <el-button size="small" type="warning" plain @click="unfav(item)">取消收藏</el-button>

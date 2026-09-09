@@ -56,8 +56,20 @@ def my_likes(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=50),
     stmt = select(Like).where(Like.user_id == user.id).order_by(Like.created_at.desc())
     total = len(session.exec(stmt).all())
     items = session.exec(stmt.offset((page - 1) * size).limit(size)).all()
-    return ok({"total": total, "page": page, "size": size,
-               "items": [{"id": l.id, "content_id": l.content_id, "created_at": l.created_at.isoformat()} for l in items]})
+    # 关联内容详情，供"我的点赞"页直接展示
+    content_ids = [l.content_id for l in items]
+    content_map = {}
+    if content_ids:
+        for c0 in session.exec(select(Content).where(Content.id.in_(content_ids))).all():
+            content_map[c0.id] = c0
+    result = []
+    for l in items:
+        c0 = content_map.get(l.content_id)
+        if c0:
+            result.append({"id": c0.id, "title": c0.title, "type": c0.type,
+                           "summary": (c0.body or "")[:60],
+                           "created_at": l.created_at.isoformat()})
+    return ok({"total": total, "page": page, "size": size, "items": result})
 
 
 # ==================== 收藏 ====================
@@ -97,8 +109,20 @@ def my_favorites(page: int = Query(1, ge=1), size: int = Query(10, ge=1, le=50),
     stmt = select(Favorite).where(Favorite.user_id == user.id).order_by(Favorite.created_at.desc())
     total = len(session.exec(stmt).all())
     items = session.exec(stmt.offset((page - 1) * size).limit(size)).all()
-    return ok({"total": total, "page": page, "size": size,
-               "items": [{"id": f.id, "content_id": f.content_id, "created_at": f.created_at.isoformat()} for f in items]})
+    # 关联内容详情，供"我的收藏"页直接展示
+    content_ids = [f.content_id for f in items]
+    content_map = {}
+    if content_ids:
+        for c0 in session.exec(select(Content).where(Content.id.in_(content_ids))).all():
+            content_map[c0.id] = c0
+    result = []
+    for f in items:
+        c0 = content_map.get(f.content_id)
+        if c0:
+            result.append({"id": c0.id, "title": c0.title, "type": c0.type,
+                           "summary": (c0.body or "")[:60],
+                           "created_at": f.created_at.isoformat()})
+    return ok({"total": total, "page": page, "size": size, "items": result})
 
 
 # ==================== 关注 ====================

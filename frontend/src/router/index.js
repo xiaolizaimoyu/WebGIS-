@@ -169,6 +169,12 @@ const routes = [
         name: 'notifications',
         component: () => import('@/views/NotificationsView.vue'),
         meta: { title: '消息通知', requiresAuth: true }
+      },
+      {
+        path: 'social',
+        name: 'my-social',
+        component: () => import('@/views/MySocialView.vue'),
+        meta: { title: '我的点赞/收藏' }
       }
     ]
   },

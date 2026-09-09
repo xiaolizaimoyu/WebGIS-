@@ -58,8 +58,14 @@ function toDetail(id) {
 }
 
 // 右侧地图
-const mapCenter = ref([116.397428, 39.90923])
-const mapMarkers = computed(() => [])
+const mapCenter = ref([118.001917, 36.814013])
+const mapMarkers = computed(() => [
+    { id: 1, lng: 118.000500, lat: 36.814800, title: '图书馆' },
+    { id: 2, lng: 118.004100, lat: 36.815300, title: '第一食堂' },
+    { id: 3, lng: 118.003600, lat: 36.812700, title: '第二食堂' },
+    { id: 4, lng: 118.005200, lat: 36.813200, title: '体育馆' },
+    { id: 5, lng: 118.000800, lat: 36.816200, title: '北门' },
+  ])
 
 onMounted(load)
 </script>
@@ -136,7 +142,7 @@ onMounted(load)
 
     <!-- 右侧：地图 + 天气 -->
     <div class="right-panel">
-      <WeatherWidget city="北京" :use-mock="true" />
+      <WeatherWidget />
       <div class="map-wrapper">
         <div class="map-header">
           <span class="map-title">🗺️ 校园地图</span>

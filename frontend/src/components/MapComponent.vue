@@ -18,7 +18,7 @@ import { fromLonLat, toLonLat } from 'ol/proj'
 import 'ol/ol.css'
 
 const props = defineProps({
-  center: { type: Array, default: () => [116.397428, 39.90923] }, // 默认北京
+  center: { type: Array, default: () => [118.001917, 36.814013] }, // 默认校园中心（淄博山东理工）
   zoom: { type: Number, default: 12 },
   markers: { type: Array, default: () => [] },
   height: { type: String, default: '100%' }
@@ -193,7 +193,7 @@ defineExpose({
   },
   fitToMarkers: () => {
     if (!olMap || !vectorSource || vectorSource.getFeatures().length === 0) return
-    olMap.getView().fit(vectorSource.getExtent(), { padding: [40, 40, 40, 40], maxZoom: 15 })
+    olMap.getView().fit(vectorSource.getExtent(), { padding: [50, 50, 50, 50], maxZoom: 16 })
   },
   highlightMarker: (id) => {
     if (!vectorSource) return
