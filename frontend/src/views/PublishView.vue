@@ -10,7 +10,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as postApi from '@/api/post'
 import LocationPicker from '@/components/map/LocationPicker.vue' // 前端A的Leaflet选点组件（免key）
-import { CAMPUS_PLACES } from '@/api/const'
+import { CAMPUS_PLACES, TYPE_MAP } from '@/api/const'
 
 const route = useRoute()
 const router = useRouter()
@@ -82,8 +82,24 @@ const rules = {
 }
 
 const fileList = ref([])
-const previewVisible = ref(false)
-const previewUrl = ref('')
+const previewVisible = ref(false) // 发布预览弹窗
+const imgPreviewVisible = ref(false) // 上传图片单张预览
+const imgPreviewUrl = ref('')
+
+// ===== 发布预览（前端 B，规划书 TODO：发布后二次编辑预览）=====
+// 以详情页同款样式弹窗展示当前表单的最终效果，发布前可自查
+// 图片 URL 兼容：已上传的用 response.url，已上传过的(编辑模式)用 url
+const previewImages = computed(() =>
+  fileList.value.map((f) => (f.response ? f.response.url : f.url)).filter(Boolean)
+)
+
+function showPreview() {
+  if (!form.title.trim()) {
+    ElMessage.warning('请先填写标题再预览')
+    return
+  }
+  previewVisible.value = true
+}
 
 // 编辑模式：回填表单
 async function loadEditing() {
@@ -138,8 +154,8 @@ function imageUrl(file) {
 }
 
 function onPreview(file) {
-  previewUrl.value = imageUrl(file)
-  previewVisible.value = true
+  imgPreviewUrl.value = imageUrl(file)
+  imgPreviewVisible.value = true
 }
 
 function onExceed() {
@@ -264,13 +280,43 @@ async function submit() {
           <el-button type="primary" :loading="submitting" @click="submit">
             {{ isEdit ? '保存修改' : '立即发布' }}
           </el-button>
+          <el-button @click="showPreview">预览效果</el-button>
           <el-button @click="router.back()">取消</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <el-dialog v-model="previewVisible" title="图片预览" width="600px">
-      <img v-if="previewUrl" :src="previewUrl" alt="preview" style="width: 100%" />
+    <!-- 发布预览弹窗（详情页同款样式，发布前自查） -->
+    <el-dialog v-model="previewVisible" title="发布预览" width="720px" top="6vh">
+      <div class="preview-wrap">
+        <div class="preview-head">
+          <el-tag :type="TYPE_MAP[form.type]?.tagType || 'info'" size="small">
+            {{ TYPE_MAP[form.type]?.label || form.type }}
+          </el-tag>
+          <span class="preview-author">预览者：我</span>
+        </div>
+        <h2 class="preview-title">{{ form.title || '（未填写标题）' }}</h2>
+        <p class="preview-body">{{ form.body || '（未填写正文）' }}</p>
+        <div v-if="previewImages.length" class="preview-gallery">
+          <el-image
+            v-for="(img, i) in previewImages"
+            :key="i"
+            :src="img"
+            fit="contain"
+            class="preview-img"
+            :preview-src-list="previewImages"
+            :initial-index="i"
+            preview-teleported
+          />
+        </div>
+        <div v-if="form.location_name || (form.longitude != null && form.latitude != null)" class="preview-loc">
+          📍 {{ form.location_name || `经度 ${form.longitude}，纬度 ${form.latitude}` }}
+        </div>
+      </div>
+    </el-dialog>
+
+    <el-dialog v-model="imgPreviewVisible" title="图片预览" width="600px">
+      <img v-if="imgPreviewUrl" :src="imgPreviewUrl" alt="preview" style="width: 100%" />
     </el-dialog>
   </div>
 </template>
@@ -290,5 +336,55 @@ async function submit() {
   margin-top: 6px;
   font-size: 12px;
   color: #909399;
+}
+
+/* 发布预览弹窗样式 */
+.preview-wrap {
+  padding: 8px;
+}
+
+.preview-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.preview-author {
+  color: #909399;
+  font-size: 13px;
+}
+
+.preview-title {
+  font-size: 20px;
+  color: #303133;
+  margin: 6px 0 12px;
+}
+
+.preview-body {
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  margin-bottom: 12px;
+}
+
+.preview-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.preview-img {
+  width: 100%;
+  border-radius: 6px;
+}
+
+.preview-loc {
+  color: #909399;
+  font-size: 13px;
+  padding-top: 8px;
+  border-top: 1px solid #ebeef5;
 }
 </style>
