@@ -2,7 +2,7 @@
 // 详情页（归属：前端 B）——内容详情 + 评论区
 // 未登录用户可浏览，发表评论会被引导到登录页
 // 已加固：加载中显示骨架、接口失败显示错误+重试，不再出现空白页
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as postApi from '@/api/post'
@@ -17,10 +17,12 @@ const store = useUserStore()
 const contentId = Number(route.params.id)
 const content = ref(null)
 const comments = ref([])
+const commentTotal = ref(0)
 const commentText = ref('')
 const sending = ref(false)
 const loading = ref(true)
 const loadFailed = ref(false)
+const showBackTop = ref(false) // 回到顶部按钮显隐
 
 async function loadDetail() {
   try {
@@ -38,9 +40,11 @@ async function loadComments() {
     const data = await postApi.listComments(contentId)
     // 接口返回 { total, items }，必须取 items 数组（直接赋对象会导致 v-for 崩溃）
     comments.value = Array.isArray(data) ? data : (data?.items || [])
+    commentTotal.value = data?.total ?? comments.value.length
   } catch (e) {
     // 评论加载失败不阻塞页面，置空即可
     comments.value = []
+    commentTotal.value = 0
   }
 }
 
@@ -144,9 +148,23 @@ async function toggleFavorite() {
   }
 }
 
+// 滚动监听：超过 300px 显示回到顶部按钮
+function onScroll() {
+  showBackTop.value = window.scrollY > 300
+}
+
+function backToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 onMounted(async () => {
   await loadAll()
   loadSocialState()
+  window.addEventListener('scroll', onScroll, { passive: true })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
 })
 </script>
 
@@ -226,7 +244,7 @@ onMounted(async () => {
       </el-card>
 
       <el-card shadow="never" class="comment-card">
-        <template #header>评论（{{ comments.length }}）</template>
+        <template #header>评论（{{ commentTotal }}）</template>
 
         <div class="comment-input">
           <el-input
@@ -254,6 +272,13 @@ onMounted(async () => {
         </div>
       </el-card>
     </template>
+
+    <!-- 回到顶部悬浮按钮（滚动超过 300px 显示） -->
+    <transition name="fade">
+      <div v-if="showBackTop" class="back-top" @click="backToTop" title="回到顶部">
+        ↑
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -423,5 +448,39 @@ onMounted(async () => {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 回到顶部悬浮按钮 */
+.back-top {
+  position: fixed;
+  right: 32px;
+  bottom: 80px;
+  width: 44px;
+  height: 44px;
+  line-height: 44px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  font-size: 20px;
+  color: #409eff;
+  z-index: 100;
+  transition: transform 0.2s;
+}
+
+.back-top:hover {
+  transform: scale(1.1);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
