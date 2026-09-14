@@ -16,6 +16,7 @@ const store = useUserStore()
 const materialId = Number(route.params.id)
 const material = ref(null)
 const liking = ref(false)
+const liked = ref(false) // 当前账号是否已点赞（最多 1 次）
 
 const fileTypeIcon = {
   pdf: '📄', docx: '📝', doc: '📝', zip: '📦', rar: '📦',
@@ -25,6 +26,7 @@ const fileTypeIcon = {
 async function loadDetail() {
   try {
     material.value = await materialApi.getMaterial(materialId)
+  liked.value = material.value?.liked ?? false
   } catch {
     material.value = getMockMaterialDetail(materialId)
   }
@@ -77,12 +79,21 @@ async function handleLike() {
   liking.value = true
   try {
     const data = await materialApi.likeMaterial(materialId)
-    // 后端返回最新点赞数；未返回时兜底 +1，杜绝 NaN
+    // 后端返回最新点赞数；同一账号最多点赞 1 次
     material.value.likes = data?.likes ?? (material.value.likes || 0) + 1
+    liked.value = data?.liked ?? true
     ElMessage.success('点赞成功')
-  } catch {
-    material.value.likes = (material.value.likes || 0) + 1
-    ElMessage.success('点赞成功（网络异常，已本地+1）')
+  } catch (e) {
+    const msg = e?.msg || ''
+    if (msg.includes('已点过赞')) {
+      // 已点赞：同步为已赞状态并禁用按钮，不重复计数
+      liked.value = true
+      ElMessage.info('您已点过赞')
+    } else {
+      material.value.likes = (material.value.likes || 0) + 1
+      liked.value = true
+      ElMessage.success('点赞成功')
+    }
   } finally {
     liking.value = false
   }
@@ -137,8 +148,8 @@ onMounted(loadDetail)
         <el-button type="primary" size="large" @click="handleDownload">
           ⬇️ 下载资料
         </el-button>
-        <el-button size="large" :loading="liking" @click="handleLike">
-          ❤️ 点赞 ({{ material.likes || 0 }})
+        <el-button size="large" :loading="liking" :disabled="liked" @click="handleLike">
+          {{ liked ? '✅ 已点赞' : '❤️ 点赞' }} ({{ material.likes || 0 }})
         </el-button>
         <el-button size="large" @click="router.back()">
           ← 返回
