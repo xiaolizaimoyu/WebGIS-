@@ -127,7 +127,7 @@ async function submit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #4facfe 0%, #6fdc8f 100%);
+  background: url('/login-bg.png') no-repeat center center / cover fixed;
 }
 
 .register-card {

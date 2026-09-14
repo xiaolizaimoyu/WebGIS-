@@ -111,7 +111,7 @@ async function submit() {
   align-items: center;
   justify-content: center;
   /* 深色渐变：与普通登录页（蓝绿亮色）形成明显视觉差异 */
-  background: linear-gradient(135deg, #1a1f2e 0%, #2d3548 100%);
+  background: url('/login-bg.png') no-repeat center center / cover fixed;
 }
 
 .admin-login-card {
