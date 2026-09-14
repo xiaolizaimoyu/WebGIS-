@@ -23,6 +23,7 @@ class User(SQLModel, table=True):
     username: str = Field(index=True, unique=True, description="登录账号，唯一")
     nickname: str = Field(description="展示昵称")
     password_hash: str = Field(description="bcrypt 哈希，绝不返回给前端")
+    is_admin: bool = Field(default=False, description="是否管理员")
     created_at: datetime = Field(default_factory=datetime.now)
 
 
