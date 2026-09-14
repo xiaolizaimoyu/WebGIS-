@@ -19,12 +19,19 @@ const routes = [
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     children: [
-      { path: '', name: 'home', component: () => import('@/views/HomeView.vue'), meta: { title: '首页' } },
+      // 首页 = 校园地图（分类帖子移至「帖子详情」/posts）
+      { path: '', redirect: '/map' },
       {
         path: 'map',
         name: 'map',
         component: () => import('@/views/MapView.vue'),
         meta: { title: '校园地图' }
+      },
+      {
+        path: 'posts/:type?',
+        name: 'posts',
+        component: () => import('@/views/PostDetailView.vue'),
+        meta: { title: '帖子详情' }
       },
       {
         path: 'publish',
