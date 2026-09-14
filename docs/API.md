@@ -90,6 +90,43 @@ Query：`page`（默认1）、`page_size`（默认20，上限100）、`keyword`�
 **GET /api/user/stats** — 用户统计（鉴权）
 成功 data：`{ "total_users": 100, "today_new": 5, "week_new": 20 }`
 
+> 用户信息响应中的 `user` 对象现已含 `is_admin` 布尔字段，前端可据此区分普通用户与管理员。
+
+### 管理员接口（后端 D，需管理员鉴权）
+
+所有 `/api/admin/*` 接口均需 `Authorization: Bearer <token>`，且当前账号 `is_admin=true`，否则返回 `code: 1011`。
+内置管理员账号：`admin` / `admin`（登录走 `POST /api/user/login`，含验证码+限流）。
+
+**GET /api/admin/stats** — 概览统计
+成功 data：`{ "total_users": 100, "total_contents": 50, "total_comments": 200, "today_new_users": 5, "today_new_contents": 3 }`
+
+**GET /api/admin/contents** — 帖子审核列表（分页）
+Query：`page`（默认1）、`page_size`（默认20，上限100）、`type`（可选，筛选分类）
+成功 data：`{ "total": 50, "page": 1, "page_size": 20, "list": [{id, title, body, type, category, images, author_id, author_name, created_at}] }`
+
+**DELETE /api/admin/contents/{content_id}** — 删除任意帖子
+成功 data：`{ "id": 1, "deleted": true }`。级联删除该帖下所有评论，绕过作者校验。
+错误：内容不存在 `code: 2001`。
+
+**GET /api/admin/users** — 用户管理列表（分页）
+Query：`page`、`page_size`、`keyword`（按用户名/昵称模糊搜索）
+成功 data：`{ "total": 100, "page": 1, "page_size": 20, "list": [{id, username, nickname, is_admin, content_count, comment_count, created_at}] }`
+
+**DELETE /api/admin/users/{user_id}** — 删除用户
+成功 data：`{ "id": 1, "deleted": true }`。
+错误：不能删自己或其他管理员 `code: 1012`；存在关联内容/评论 `code: 1007`；用户不存在 `code: 1005`。
+
+**DELETE /api/admin/comments/{comment_id}** — 删除任意评论
+成功 data：`{ "id": 1, "deleted": true }`。
+错误：评论不存在 `code: 2001`。
+
+### 错误码补充
+
+| code | 含义 |
+|---|---|
+| 1011 | 需要管理员权限 |
+| 1012 | 管理员账号操作受限（不能删自己/其他管理员） |
+
 ### 图片上传（内容模块，鉴权）
 
 **POST /api/upload** — 上传单张图片（multipart/form-data，字段名 `file`）
