@@ -9,10 +9,13 @@ import { useUserStore } from '@/stores/user'
 const router = useRouter()
 const store = useUserStore()
 const isLoggedIn = computed(() => store.isLoggedIn)
+const isAdmin = computed(() => store.isAdmin)
 
 function onCommand(cmd) {
   if (cmd === 'mine') {
     router.push('/mine')
+  } else if (cmd === 'admin') {
+    router.push('/admin')
   } else if (cmd === 'logout') {
     store.logout()
     ElMessage.success('已退出登录')
@@ -35,6 +38,7 @@ function onCommand(cmd) {
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="mine">我的发布</el-dropdown-item>
+              <el-dropdown-item v-if="isAdmin" command="admin">管理后台</el-dropdown-item>
               <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
