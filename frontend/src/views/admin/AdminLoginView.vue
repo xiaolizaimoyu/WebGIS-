@@ -108,8 +108,9 @@ async function submit() {
 .admin-login-page {
   min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding-top: 9vh;
   /* 深色渐变：与普通登录页（蓝绿亮色）形成明显视觉差异 */
   background: url('/login-bg.png') no-repeat center center / cover fixed;
 }
