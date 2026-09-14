@@ -1,9 +1,8 @@
 <script setup>
-// 地图浏览组件（归属：前端 A）——彩色分类点 + 点击弹窗 + 类型筛选
-// 父组件传入带坐标的 points，本组件负责渲染与筛选；点“查看详情”跳帖子页。
+// 地图浏览组件（高德 JS API 2.0 版）——彩色分类点 + 点击弹窗 + 类型筛选
+// 父组件传入带坐标的 points，本组件负责渲染与筛选；点「查看详情」跳帖子页。
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import L from 'leaflet'
 import { initMap, colorOf, buildPopupEl } from './mapUtil'
 import { TYPE_MAP } from '@/api/const'
 
@@ -20,8 +19,16 @@ const options = [{ value: 'all', label: '全部类型' }]
 for (const [v, item] of Object.entries(TYPE_MAP)) options.push({ value: v, label: item.label })
 
 let map = null
-let layer = null
+let AMap = null
+let markers = []
+let infoWindow = null
 let fitted = false
+
+function circleSvg(color) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+    <circle cx="11" cy="11" r="9" fill="${color}" fill-opacity="0.9" stroke="#ffffff" stroke-width="2"/>
+  </svg>`
+}
 
 function normalized(item) {
   if (item.longitude == null || item.latitude == null) return null
@@ -29,8 +36,9 @@ function normalized(item) {
 }
 
 function render() {
-  if (!layer) return
-  layer.clearLayers()
+  if (!map || !AMap) return
+  if (markers.length) map.remove(markers)
+  markers = []
   const show = activeType.value === 'all'
     ? props.points
     : props.points.filter((p) => p.type === activeType.value)
@@ -39,27 +47,27 @@ function render() {
     const p = normalized(raw)
     if (!p) continue
     count++
-    const marker = L.circleMarker([p.lat, p.lng], {
-      radius: 8,
-      color: '#ffffff',
-      weight: 2,
-      fillColor: colorOf(p.type),
-      fillOpacity: 0.9
-    }).addTo(layer)
-    // 点位常显标签：帖子标题（超出截断），让用户一眼看出点位对应的帖子/地点
-    marker.bindTooltip(p.title, {
-      permanent: true,
-      direction: 'top',
-      offset: [0, -10],
-      opacity: 0.92,
-      className: 'map-tooltip'
+    const marker = new AMap.Marker({
+      position: [p.lng, p.lat],
+      content: circleSvg(colorOf(p.type)),
+      offset: new AMap.Pixel(-11, -11)
     })
-    marker.bindPopup(buildPopupEl(p, (id) => router.push(`/content/${id}`)))
+    marker.setLabel({
+      content: `<div style="font-size:11px;color:#303133;background:#fff;padding:1px 6px;border-radius:4px;border:1px solid #e4e7ed;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;">${p.title}</div>`,
+      direction: 'top',
+      offset: new AMap.Pixel(0, -6)
+    })
+    marker.on('click', () => {
+      if (!infoWindow) infoWindow = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -22) })
+      infoWindow.setContent(buildPopupEl(p, (id) => router.push(`/content/${id}`)))
+      infoWindow.open(map, [p.lng, p.lat])
+    })
+    markers.push(marker)
   }
-  // 第一次有数据时把视野框到点位上
-  if (!fitted && layer.getLayers().length) {
+  map.add(markers)
+  if (!fitted && markers.length) {
     fitted = true
-    map.fitBounds(layer.getBounds().pad(0.2))
+    map.setFitView(markers, false, [60, 60, 60, 60])
   }
 }
 
@@ -70,14 +78,20 @@ watch(activeType, () => {
 
 onMounted(async () => {
   await nextTick()
-  map = initMap(rootEl.value)
-  layer = L.featureGroup().addTo(map)  // featureGroup 才有 getBounds()，layerGroup 没有
-  // 容器尺寸稳定后再渲染一次，避免初始化时宽度为 0
-  setTimeout(() => { map.invalidateSize(); render() }, 60)
+  try {
+    map = await initMap(rootEl.value)
+    AMap = window.AMap
+    setTimeout(() => { map.resize(); render() }, 60)
+  } catch (e) {
+    console.error('地图初始化失败', e)
+  }
 })
 
 onBeforeUnmount(() => {
-  if (map) { map.remove(); map = null }
+  if (map) {
+    map.destroy()
+    map = null
+  }
 })
 </script>
 
@@ -97,7 +111,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
 }
-.map-root .leaflet-container {
+.map-root .amap-container {
   width: 100%;
   height: 100%;
 }
@@ -110,16 +124,5 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.15);
   padding: 4px 6px;
-}
-
-.map-root :deep(.map-tooltip) {
-  font-size: 11px;
-  color: #303133;
-  max-width: 140px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 2px 6px;
-  border-radius: 4px;
 }
 </style>
