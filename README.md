@@ -185,9 +185,7 @@ npm run dev
 | **前端 B** | 前端 | 实时天气、帖子详情、我的发布 | `components/WeatherWidget.vue`、`views/DetailView.vue`、`MineView.vue` |
 | **前端 C** | 前端 | 整体布局/路由/请求封装、积分商城、拼车、失物招领、学习资料、通知中心、个人中心 | `layouts/MainLayout.vue`、`router/`、`api/request.js`、`views/MallView.vue`、`Carpool*View.vue`、`LostFound*View.vue`、`Materials*View.vue`、`NotificationsView.vue` |
 | **后端 D** | 后端 | 用户认证/验证码/限流、管理员后台、地点坐标管理 | `routers/user.py`、`routers/admin.py`、`core/admin.py`、`routers/captcha.py` |
-| **后端 E** | 后端 | 内容业务模块全部开发与优化
-
-| `routers/post.py`（42 次提交）、`docs/API.md`（11 次）、`models.py`、`schemas.py` |
+| **后端 E** | 后端 | 内容业务模块全部开发与优化 | `routers/post.py`、`docs/API.md`、`models.py`、`schemas.py` |
 | **后端 F** | 后端 | 主程序/数据库/基础设施、积分、商城、社交互动、学习资料/拼车/失物扩展 | `main.py`、`db.py`、`models.py`、`core/*`、`routers/social.py`、`points.py`、`mall.py`、`extensions.py` |
 
 **组长职责（xiaolizaimoyu）**：整体架构设计、分支管理与代码合并、主程序整合、Bug 修复与全链路联调、README 与交付文档整理。
