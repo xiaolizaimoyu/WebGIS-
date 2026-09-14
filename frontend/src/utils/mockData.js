@@ -135,7 +135,7 @@ export function getMockCarpools() {
       created_at: now - 1 * day, status: 'recruiting'
     },
     {
-      id: 3, title: '去高铁站拼车（随时出发）', from: '学校北门', to: '北京南站', depart_time: '2026-09-05 15:00',
+      id: 3, title: '去高铁站拼车（随时出发）', from: '学校北门', to: '淄博北站', depart_time: '2026-09-05 15:00',
       return_time: '', seats_total: 4, seats_left: 3, price_per_person: 50,
       author_name: '顺风车', author_avatar: '', phone: '137****7777', note: '今天下午3点出发，赶高铁的同学速来！',
       created_at: now - 30 * 60000, status: 'recruiting'

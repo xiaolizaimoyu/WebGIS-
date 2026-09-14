@@ -266,7 +266,37 @@ Query：`page`（默认1）、`size`（默认20，最大100）
 
 ---
 
-## 数据库表结构（共 11 张表）
+## 管理员后台模块（后端 D）
+
+前缀：/api/admin，全部接口需 Authorization: Bearer <token> **且账号 is_admin=True**（内置管理员 admin/admin）。
+非管理员调用返回 code=1011 需要管理员权限。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | /api/admin/stats | 概览统计：{total_users, total_contents, total_comments, today_new_users, today_new_contents} |
+| GET | /api/admin/contents | 帖子审核列表（分页）：{total, page, page_size, list}，支持 	ype 筛选 |
+| DELETE | /api/admin/contents/{id} | 删除任意帖子（级联删除其评论/点赞/收藏） |
+| GET | /api/admin/users | 用户管理列表（分页），支持 keyword 搜索 |
+| DELETE | /api/admin/users/{id} | 删除用户（不可删管理员账号） |
+| DELETE | /api/admin/comments/{comment_id} | 删除任意评论 |
+| POST | /api/admin/locations | 地点坐标新增/更新（按名称 upsert）：{name, lng, lat} |
+| DELETE | /api/admin/locations/{loc_id} | 删除地点坐标 |
+
+> 地点坐标库 /api/locations（公开）供发布选点与地图点位使用；管理员可在后台地图上点击拾取真实坐标录入。
+
+---
+
+## 数据库表结构（共 14 张表）
+
+| 表 | 说明 | 表 | 说明 |
+|---|---|---|---|
+| users | 用户（积分、is_admin） | points_log | 积分流水 |
+| contents | 内容帖（经纬度/地点名） | sign_records | 签到记录 |
+| comments | 评论 | mall_goods | 商城商品 |
+| likes | 点赞 | orders | 兑换订单 |
+| favorites | 收藏 | follows | 关注 |
+| notifications | 通知 | carpools | 拼车 |
+| location_points | 地点坐标库 | carpool_applications | 拼车申请 |
 
 | 表名 | 说明 | 关键字段 |
 |---|---|---|
