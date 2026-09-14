@@ -20,6 +20,7 @@ from app.core.response import BizError, err
 from app.db import Session, create_db_and_tables, engine
 from app.routers import post as post_router
 from app.routers import user as user_router
+from app.routers import admin as admin_router
 
 
 @asynccontextmanager
@@ -55,6 +56,7 @@ app.add_middleware(
 # 整合各路由模块
 app.include_router(user_router.router)
 app.include_router(post_router.router)
+app.include_router(admin_router.router)
 
 # 上传图片的静态访问：/uploads/xxx.png
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
