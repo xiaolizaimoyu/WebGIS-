@@ -125,20 +125,21 @@ async function submit() {
 .register-page {
   min-height: 100vh;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding-top: 6vh;
   background: url('/login-bg.png') no-repeat center center / cover fixed;
 }
 
 .register-card {
   width: 420px;
-  background: rgba(255, 255, 255, 0.55);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.45);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 14px;
-  padding: 34px 36px 30px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  padding: 28px 32px 26px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
 }
 
 .title {
