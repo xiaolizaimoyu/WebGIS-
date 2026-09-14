@@ -116,11 +116,13 @@ async function submit() {
 
 .admin-login-card {
   width: 400px;
-  background: #252b3a;
-  border: 1px solid #3a4154;
+  background: rgba(24, 28, 42, 0.55);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 14px;
   padding: 40px 36px 30px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
 }
 
 .brand-row {

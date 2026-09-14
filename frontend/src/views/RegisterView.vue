@@ -132,10 +132,13 @@ async function submit() {
 
 .register-card {
   width: 420px;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.65);
   border-radius: 14px;
   padding: 34px 36px 30px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
 }
 
 .title {
