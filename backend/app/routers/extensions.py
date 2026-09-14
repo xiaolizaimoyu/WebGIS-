@@ -26,6 +26,9 @@ from app.models import Carpool, CarpoolApplication, User
 
 router = APIRouter(tags=["扩展模块"])
 
+# 资料点赞记录：mid -> set(user_id)，同一账号对同一资料最多点赞 1 次
+_material_likes: dict[int, set[int]] = {}
+
 # ---------- 内存演示数据（后续可迁移到数据库） ----------
 _questions = [
     {"id": 1, "title": "高数期末复习重点有哪些？", "body": "马上要期末考试了，求学长学姐分享一下高数下册的复习重点和必考题型，万分感谢！",
@@ -85,7 +88,6 @@ def list_questions(keyword: Optional[str] = None, tag: Optional[str] = None,
 def get_question(qid: int):
     q = next((q for q in _questions if q["id"] == qid), None)
     if not q:
-        from app.core.response import BizError
         raise BizError(404, "问题不存在")
     return ok(q)
 
@@ -121,16 +123,15 @@ def create_answer(qid: int, data: dict, user: User = Depends(get_current_user)):
 def adopt_answer(qid: int, aid: int, user: User = Depends(get_current_user)):
     q = next((q for q in _questions if q["id"] == qid), None)
     if not q:
-        from app.core.response import BizError
         raise BizError(404, "问题不存在")
     if q.get("author_id") != user.id:
-        from app.core.response import BizError
         raise BizError(403, "只有问题作者才能采纳答案")
     answers = _answers.get(qid, [])
     a = next((x for x in answers if x["id"] == aid), None)
     if not a:
-        from app.core.response import BizError
         raise BizError(404, "答案不存在")
+    if q.get("solved"):
+        raise BizError(400, "该问题已解决，不能重复采纳")
     # 取消其它答案的采纳标记，目标答案设为已采纳
     for x in answers:
         x["adopted"] = (x["id"] == aid)
@@ -154,12 +155,14 @@ def list_materials(keyword: Optional[str] = None, subject: Optional[str] = None,
 
 
 @router.get("/materials/{mid}", summary="资料详情")
-def get_material(mid: int):
+def get_material(mid: int, user: Optional[User] = Depends(_get_optional_user)):
     m = next((m for m in _materials if m["id"] == mid), None)
     if not m:
-        from app.core.response import BizError
         raise BizError(404, "资料不存在")
-    return ok(m)
+    result = dict(m)
+    # 已登录用户返回是否已点赞，供前端禁用重复点赞
+    result["liked"] = bool(user) and user.id in _material_likes.get(mid, set())
+    return ok(result)
 
 
 @router.get("/materials/{mid}/download", summary="下载资料（真实文件）")
@@ -183,12 +186,16 @@ def download_material(mid: int):
 
 @router.post("/materials/{mid}/like", summary="点赞资料（需登录）")
 def like_material(mid: int, user: User = Depends(get_current_user)):
-    """点赞数 +1，返回最新点赞数，前端据此展示，避免 NaN"""
+    """点赞数 +1；同一账号对同一资料最多点赞 1 次，重复点赞拒绝"""
     m = next((m for m in _materials if m["id"] == mid), None)
     if not m:
         raise BizError(404, "资料不存在")
+    liked_set = _material_likes.setdefault(mid, set())
+    if user.id in liked_set:
+        raise BizError(400, "您已点过赞，不能重复点赞")
+    liked_set.add(user.id)
     m["likes"] = m.get("likes", 0) + 1
-    return ok({"likes": m["likes"]}, "点赞成功")
+    return ok({"likes": m["likes"], "liked": True}, "点赞成功")
 
 
 # ==================== 组队拼车（carpools 表，完整 CRUD） ====================
@@ -438,16 +445,17 @@ def apply_carpool(cid: int, data: dict, user: User = Depends(get_current_user),
         raise BizError(400, "申请人数需在 1-7 之间")
     if not PHONE_RE.match(phone):
         raise BizError(400, "手机号格式不正确，需为 11 位数字")
-    # 同一用户对同一拼车只能有一条待确认申请
+    # 同一用户对同一拼车只能有一条有效申请（待确认/已通过），被拒绝后可以重新申请
     existing = session.exec(
         select(CarpoolApplication).where(
             CarpoolApplication.carpool_id == cid,
             CarpoolApplication.applicant_id == user.id,
-            CarpoolApplication.status == "pending",
+            CarpoolApplication.status.in_(["pending", "approved"]),
         )
     ).first()
     if existing:
-        raise BizError(400, "您已提交过申请，等待车主确认中")
+        tip = "您已提交过申请，等待车主确认中" if existing.status == "pending" else "您已是该拼车的同行乘客"
+        raise BizError(400, tip)
     app = CarpoolApplication(
         carpool_id=cid, applicant_id=user.id, applicant_name=name,
         phone=phone, people_count=people, remark=(data.get("remark") or "").strip()[:300],
