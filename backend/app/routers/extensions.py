@@ -184,15 +184,17 @@ def download_material(mid: int):
                     headers={"Content-Disposition": disposition})
 
 
-@router.post("/materials/{mid}/like", summary="点赞资料（需登录）")
+@router.post("/materials/{mid}/like", summary="点赞/取消点赞资料（需登录，切换）")
 def like_material(mid: int, user: User = Depends(get_current_user)):
-    """点赞数 +1；同一账号对同一资料最多点赞 1 次，重复点赞拒绝"""
+    """点赞/取消切换：已赞则取消，未赞则点赞；同一账号同一资料只计一次"""
     m = next((m for m in _materials if m["id"] == mid), None)
     if not m:
         raise BizError(404, "资料不存在")
     liked_set = _material_likes.setdefault(mid, set())
     if user.id in liked_set:
-        raise BizError(400, "您已点过赞，不能重复点赞")
+        liked_set.remove(user.id)
+        m["likes"] = max(0, m.get("likes", 0) - 1)
+        return ok({"likes": m["likes"], "liked": False}, "已取消点赞")
     liked_set.add(user.id)
     m["likes"] = m.get("likes", 0) + 1
     return ok({"likes": m["likes"], "liked": True}, "点赞成功")
