@@ -14,11 +14,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.core.admin import ensure_admin_account
 from app.core.config import UPLOAD_DIR
 from app.core.response import BizError, err
-from app.db import create_db_and_tables
+from app.db import Session, create_db_and_tables, engine
 from app.routers import post as post_router
 from app.routers import user as user_router
+from app.routers import admin as admin_router
 from app.routers import social as social_router
 from app.routers import points as points_router
 from app.routers import mall as mall_router
@@ -30,6 +32,9 @@ async def lifespan(_: FastAPI):
     """应用启动时：准备上传目录、创建数据表。"""
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     create_db_and_tables()
+    # 确保内置管理员账号存在（admin/admin，is_admin=True）
+    with Session(engine) as session:
+        ensure_admin_account(session)
     yield
 
 
@@ -60,6 +65,7 @@ app.include_router(points_router.router, prefix="/api/points")
 app.include_router(points_router.notify_router)
 app.include_router(mall_router.router)
 app.include_router(extensions_router.router, prefix="/api")
+app.include_router(admin_router.router)
 
 # 上传图片的静态访问：/uploads/xxx.png
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")

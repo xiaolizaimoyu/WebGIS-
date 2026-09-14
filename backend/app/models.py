@@ -38,6 +38,7 @@ class User(SQLModel, table=True):
     password_hash: str = Field(description="bcrypt 哈希，绝不返回给前端")
     points: int = Field(default=0, description="积分余额，签到/发帖/评论增加，兑换商品扣减")
     created_at: datetime = Field(default_factory=datetime.now)
+    is_admin: bool = Field(default=False, description='是否管理员')
 
 
 class Content(SQLModel, table=True):
