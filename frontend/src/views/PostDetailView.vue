@@ -1,11 +1,39 @@
 ﻿<script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import * as postApi from '@/api/post'
 import { TYPE_MAP, formatTime } from '@/api/const'
+import MapComponent from '@/components/MapComponent.vue'
+import { useLocations } from '@/composables/useLocations'
 
 const route = useRoute()
 const router = useRouter()
+const mapRef = ref(null)
+const { resolveContentPoint } = useLocations()
+
+// 右侧地图点位：列表帖子 → 真实坐标/确定性随机
+const mapMarkers = computed(() =>
+  list.value.map((item) => {
+    const pt = resolveContentPoint(item)
+    return pt ? { id: item.id, lng: pt.lng, lat: pt.lat, title: item.title } : null
+  }).filter(Boolean)
+)
+
+// 点击帖子「定位到地图」：地图移动 + 点位高亮
+function locatePost(item) {
+  const pt = resolveContentPoint(item)
+  if (!pt || !mapRef.value) return
+  mapRef.value.setCenter(pt.lng, pt.lat, 16)
+  mapRef.value.highlightMarker(item.id)
+  // 触发地图高亮标记后，右侧滚动到地图卡片
+  document.querySelector('.map-card')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+}
+
+// 点击地图点位：左侧列表滚动到对应帖子卡片
+function onMarkerClick({ id }) {
+  const el = document.getElementById('post-' + id)
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
 
 const categories = [
   { value: 'all', label: '全部帖子', icon: '📌' },
@@ -87,66 +115,156 @@ function goToDetail(id) {
 
 <template>
   <div class="posts-page">
-    <div class="page-header">
-      <div>
-        <p class="eyebrow">校园交流</p>
-        <h2>帖子详情</h2>
+    <div class="detail-layout">
+      <!-- 左侧：帖子内容列表 -->
+      <div class="left-col">
+        <div class="page-header">
+          <div>
+            <p class="eyebrow">校园交流</p>
+            <h2>帖子详情</h2>
+          </div>
+          <el-button type="primary" round @click="router.push('/publish')">＋ 发布帖子</el-button>
+        </div>
+
+        <div class="category-grid">
+          <button
+            v-for="item in categories"
+            :key="item.value"
+            class="category-card"
+            :class="{ active: selectedType === item.value }"
+            @click="goToCategory(item.value)"
+          >
+            <span class="category-icon">{{ item.icon }}</span>
+            <span class="category-label">{{ item.label }}</span>
+          </button>
+        </div>
+
+        <div class="section-header">
+          <h3>{{ selectedTitle }}</h3>
+          <span>共 {{ total }} 条</span>
+        </div>
+
+        <div v-if="loading" class="loading-box">
+          <el-skeleton :rows="5" animated />
+        </div>
+
+        <div v-else-if="!list.length" class="empty-box">
+          <el-empty description="暂无该分类帖子，快来发布第一条吧" />
+        </div>
+
+        <div v-else class="post-list">
+          <article
+            v-for="item in list"
+            :id="'post-' + item.id"
+            :key="item.id"
+            class="post-card"
+            @click="goToDetail(item.id)"
+          >
+            <div class="post-topline">
+              <el-tag :type="TYPE_MAP[item.type]?.tagType || 'info'" size="small">
+                {{ TYPE_MAP[item.type]?.label || item.type }}
+              </el-tag>
+              <span class="meta-time">{{ formatTime(item.created_at) }}</span>
+            </div>
+
+            <h4>{{ item.title }}</h4>
+            <p>{{ item.body || '暂无内容简介' }}</p>
+
+            <div class="post-bottomline">
+              <span>作者：{{ item.author_name || '校园用户' }}</span>
+              <button class="locate-btn" @click.stop="locatePost(item)">📍 定位到地图</button>
+              <span>查看详情 →</span>
+            </div>
+          </article>
+        </div>
       </div>
-      <el-button type="primary" round @click="router.push('/publish')">＋ 发布帖子</el-button>
-    </div>
 
-    <div class="category-grid">
-      <button
-        v-for="item in categories"
-        :key="item.value"
-        class="category-card"
-        :class="{ active: selectedType === item.value }"
-        @click="goToCategory(item.value)"
-      >
-        <span class="category-icon">{{ item.icon }}</span>
-        <span class="category-label">{{ item.label }}</span>
-      </button>
-    </div>
-
-    <div class="section-header">
-      <h3>{{ selectedTitle }}</h3>
-      <span>共 {{ total }} 条</span>
-    </div>
-
-    <div v-if="loading" class="loading-box">
-      <el-skeleton :rows="5" animated />
-    </div>
-
-    <div v-else-if="!list.length" class="empty-box">
-      <el-empty description="暂无该分类帖子，快来发布第一条吧" />
-    </div>
-
-    <div v-else class="post-list">
-      <article v-for="item in list" :key="item.id" class="post-card" @click="goToDetail(item.id)">
-        <div class="post-topline">
-          <el-tag :type="TYPE_MAP[item.type]?.tagType || 'info'" size="small">
-            {{ TYPE_MAP[item.type]?.label || item.type }}
-          </el-tag>
-          <span class="meta-time">{{ formatTime(item.created_at) }}</span>
-        </div>
-
-        <h4>{{ item.title }}</h4>
-        <p>{{ item.body || '暂无内容简介' }}</p>
-
-        <div class="post-bottomline">
-          <span>作者：{{ item.author_name || '校园用户' }}</span>
-          <span>查看详情 →</span>
-        </div>
-      </article>
+      <!-- 右侧：校园地图（随列表滚动，点位高亮联动） -->
+      <div class="right-col">
+        <el-card class="map-card" shadow="never">
+          <div class="map-title">
+            <span>📍 校园地图</span>
+            <span class="map-count">共 {{ total }} 个点位 · 点击帖子下方「定位到地图」高亮</span>
+          </div>
+          <MapComponent
+            ref="mapRef"
+            :center="[118.007853, 36.814398]"
+            :zoom="15"
+            :markers="mapMarkers"
+            height="calc(100vh - 190px)"
+            @marker-click="onMarkerClick"
+          />
+        </el-card>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .posts-page {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 18px auto 30px;
   padding: 0 18px;
+}
+
+.detail-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.left-col {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.right-col {
+  flex: 0 0 430px;
+  position: sticky;
+  top: 76px;
+}
+
+.map-card {
+  border-radius: 14px;
+  border: 1px solid #e4e7ed;
+  overflow: hidden;
+}
+
+.map-card :deep(.el-card__body) {
+  padding: 12px;
+}
+
+.map-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1d2a36;
+}
+
+.map-count {
+  font-size: 12px;
+  font-weight: 400;
+  color: #909399;
+}
+
+.locate-btn {
+  border: none;
+  background: #eaf2ff;
+  color: #3b82f6;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.locate-btn:hover {
+  background: #3b82f6;
+  color: #fff;
 }
 
 .page-header {

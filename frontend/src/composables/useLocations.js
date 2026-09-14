@@ -22,7 +22,16 @@ export function useLocations() {
         placeMap.value = {}
       })
   }
-  // 旧地点名称 → 坐标库名称 的别名映射（旧帖子用的是长名，坐标库是简称）
+  // 重新从后端拉取（管理员校准坐标后刷新）
+  const reload = () => {
+    placeMap.value = null
+    promise = null
+    return useLocations()
+  }
+  return { placeMap, resolve, resolveContentPoint, reload }
+}
+
+// 旧地点名称 → 坐标库名称 的别名映射（旧帖子用的是长名，坐标库是简称）
 const PLACE_ALIAS = {
   '图书馆': '逸夫图书馆',
   '逸夫楼': '逸夫图书馆',
@@ -37,19 +46,35 @@ const PLACE_ALIAS = {
 }
 
 // 名称 → 真实坐标：先精确匹配，再走别名映射（找不到返回 null）
-  const resolve = (name) => {
-    if (!name || !placeMap.value) return null
-    if (placeMap.value[name]) return placeMap.value[name]
-    const target = PLACE_ALIAS[name]
-    return target ? placeMap.value[target] || null : null
+function resolve(name) {
+  if (!name || !placeMap.value) return null
+  if (placeMap.value[name]) return placeMap.value[name]
+  const target = PLACE_ALIAS[name]
+  return target ? placeMap.value[target] || null : null
+}
+
+// 校园中心（GCJ-02），未录入地点在此周边确定性随机散布
+const MAP_CENTER = { lng: 118.007853, lat: 36.814398 }
+
+// 线性同余伪随机：同一帖子永远得到同一组偏移，刷新不乱跳
+function seededOffset(seed) {
+  const a = (seed * 9301 + 49297) % 233280
+  const b = (seed * 49297 + 9301) % 233280
+  return {
+    dLng: ((a / 233280) - 0.5) * 0.014, // ±0.007° ≈ ±700m
+    dLat: ((b / 233280) - 0.5) * 0.01 // ±0.005° ≈ ±550m
   }
-  // 重新从后端拉取（管理员校准坐标后刷新）
-  const reload = () => {
-    placeMap.value = null
-    promise = null
-    return useLocations()
-  }
-  return { placeMap, resolve, reload }
+}
+
+// 帖子 → 地图坐标：
+// 1) 地点名命中坐标库（含别名）→ 真实坐标；
+// 2) 未录入 → 按帖子 id 确定性伪随机散布校园周边。
+function resolveContentPoint(item) {
+  if (!item) return null
+  const poi = resolve(item.location_name)
+  if (poi) return { lng: poi.lng, lat: poi.lat }
+  const off = seededOffset(item.id || Math.floor(Math.random() * 100000))
+  return { lng: MAP_CENTER.lng + off.dLng, lat: MAP_CENTER.lat + off.dLat }
 }
 
 export { promise as locationsReady }

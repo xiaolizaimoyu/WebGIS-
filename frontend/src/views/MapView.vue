@@ -21,33 +21,14 @@ const pendingNav =
     ? { lng: Number(route.query.navLng), lat: Number(route.query.navLat), title: route.query.navTitle || '' }
     : null
 
-// 帖子点位：
-// 1) 地点名在真实坐标库中命中 → 用真实坐标（管理员校准）；
-// 2) 未录入的地点 → 按帖子 id 确定性伪随机散布在校园周边（刷新位置稳定，不重复堆叠）。
-const { resolve: resolvePlace } = useLocations()
-const MAP_CENTER = { lng: 118.007853, lat: 36.814398 } // 校园中心（GCJ-02）
-
-// 线性同余伪随机：同一帖子永远得到同一组偏移，刷新不乱跳
-function seededOffset(seed) {
-  const a = (seed * 9301 + 49297) % 233280
-  const b = (seed * 49297 + 9301) % 233280
-  return {
-    dLng: ((a / 233280) - 0.5) * 0.014, // ±0.007° ≈ ±700m
-    dLat: ((b / 233280) - 0.5) * 0.01   // ±0.005° ≈ ±550m
-  }
-}
-
+// 帖子点位：真实坐标库命中用真实坐标，未录入按帖子 id 确定性随机散布（共享 useLocations）
+const { resolveContentPoint } = useLocations()
 const list = computed(() =>
   rawList.value
     .filter((p) => p.longitude != null && p.latitude != null)
     .map((p) => {
-      const poi = resolvePlace(p.location_name)
-      if (poi) {
-        return { ...p, longitude: poi.lng, latitude: poi.lat }
-      }
-      // 未录入地点：按帖子 id 生成稳定随机坐标
-      const off = seededOffset(p.id || Math.floor(Math.random() * 100000))
-      return { ...p, longitude: MAP_CENTER.lng + off.dLng, latitude: MAP_CENTER.lat + off.dLat }
+      const pt = resolveContentPoint(p)
+      return pt ? { ...p, longitude: pt.lng, latitude: pt.lat } : p
     })
 )
 
