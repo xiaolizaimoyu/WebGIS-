@@ -63,6 +63,9 @@ async function submit() {
         还没有账号？
         <router-link class="link" to="/register">立即注册</router-link>
       </div>
+      <div class="footer admin-entry">
+        <router-link class="link admin-link" to="/admin/login">🛡️ 管理员入口</router-link>
+      </div>
     </div>
   </div>
 </template>
@@ -113,5 +116,16 @@ async function submit() {
 
 .link {
   color: #1d6df0;
+}
+
+.admin-entry {
+  margin-top: 10px;
+  font-size: 13px;
+}
+.admin-link {
+  color: #909399;
+}
+.admin-link:hover {
+  color: #6741d9;
 }
 </style>
