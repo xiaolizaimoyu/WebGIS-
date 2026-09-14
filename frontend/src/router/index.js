@@ -14,6 +14,18 @@ const routes = [
     component: () => import('@/views/RegisterView.vue'),
     meta: { title: '注册' }
   },
+  // 管理员登录页：独立全屏布局，深色主题（与普通登录页视觉区分）
+  {
+    path: '/admin/login',
+    component: () => import('@/views/admin/AdminLoginView.vue'),
+    meta: { title: '管理员登录' }
+  },
+  // 管理后台：独立全屏布局，需登录且为管理员
+  {
+    path: '/admin',
+    component: () => import('@/views/admin/AdminView.vue'),
+    meta: { title: '管理后台', requiresAuth: true, admin: true }
+  },
   // 业务页面统一套 MainLayout 外壳（顶部导航）
   {
     path: '/',
@@ -197,7 +209,11 @@ const router = createRouter({
 router.beforeEach((to) => {
   const store = useUserStore()
   if (to.meta.requiresAuth && !store.isLoggedIn) {
-    return { path: '/login', query: { redirect: to.fullPath } }
+    // 管理员页面跳管理员登录页，普通页面跳普通登录页
+    return { path: to.meta.admin ? '/admin/login' : '/login', query: { redirect: to.fullPath } }
+  }
+  if (to.meta.admin && !store.isAdmin) {
+    return { path: '/admin/login', query: { redirect: to.fullPath } }
   }
 })
 

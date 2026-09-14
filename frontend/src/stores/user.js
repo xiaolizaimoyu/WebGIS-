@@ -15,6 +15,8 @@ export const useUserStore = defineStore('user', () => {
   const signLoading = ref(false)
 
   const isLoggedIn = computed(() => !!token.value)
+  // 是否管理员：登录接口 user_public 返回 is_admin
+  const isAdmin = computed(() => !!(userInfo.value && userInfo.value.is_admin))
 
   // 登录成功：存 Pinia 状态 + localStorage
   async function login(form) {
@@ -98,6 +100,7 @@ export const useUserStore = defineStore('user', () => {
     signStatus,
     signLoading,
     isLoggedIn,
+    isAdmin,
     login,
     setUser,
     logout,

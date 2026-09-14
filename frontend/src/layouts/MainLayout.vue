@@ -14,6 +14,7 @@ const store = useUserStore()
 const notificationStore = useNotificationStore()
 
 const isLoggedIn = computed(() => store.isLoggedIn)
+const isAdmin = computed(() => store.isAdmin)
 const avatarUrl = computed(() => store.userInfo?.avatar || '')
 const avatarText = computed(() => (store.userInfo?.nickname || '?').slice(0, 1))
 const unreadCount = computed(() => notificationStore.unreadCount)
@@ -50,6 +51,8 @@ function onCommand(cmd) {
     router.push('/mine')
   } else if (cmd === 'mall') {
     router.push('/mall')
+  } else if (cmd === 'admin') {
+    router.push('/admin')
   } else if (cmd === 'logout') {
     store.logout()
     ElMessage.success('已退出登录')
@@ -198,6 +201,9 @@ onMounted(() => {
               </el-dropdown-item>
               <el-dropdown-item command="mine">
                 <span>📝 我的发布</span>
+              </el-dropdown-item>
+              <el-dropdown-item v-if="isAdmin" command="admin">
+                <span>🛡️ 管理后台</span>
               </el-dropdown-item>
               <el-dropdown-item command="mall">
                 <span>🎁 积分商城</span>
