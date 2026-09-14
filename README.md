@@ -185,19 +185,10 @@ npm run dev
 | **前端 B** | 前端 | 实时天气、帖子详情、我的发布 | `components/WeatherWidget.vue`、`views/DetailView.vue`、`MineView.vue` |
 | **前端 C** | 前端 | 整体布局/路由/请求封装、积分商城、拼车、失物招领、学习资料、通知中心、个人中心 | `layouts/MainLayout.vue`、`router/`、`api/request.js`、`views/MallView.vue`、`Carpool*View.vue`、`LostFound*View.vue`、`Materials*View.vue`、`NotificationsView.vue` |
 | **后端 D** | 后端 | 用户认证/验证码/限流、管理员后台、地点坐标管理 | `routers/user.py`、`routers/admin.py`、`core/admin.py`、`routers/captcha.py` |
-| **后端 E** | 后端 | 内容业务模块全部开发与优化（详见下方明细） | `routers/post.py`（42 次提交）、`docs/API.md`（11 次）、`models.py`、`schemas.py` |
+| **后端 E** | 后端 | 内容业务模块全部开发与优化
+
+| `routers/post.py`（42 次提交）、`docs/API.md`（11 次）、`models.py`、`schemas.py` |
 | **后端 F** | 后端 | 主程序/数据库/基础设施、积分、商城、社交互动、学习资料/拼车/失物扩展 | `main.py`、`db.py`、`models.py`、`core/*`、`routers/social.py`、`points.py`、`mall.py`、`extensions.py` |
-
-### 后端 E 职责明细（42 次提交，内容业务模块全栈开发）
-
-1. **内容 CRUD 核心**：内容六类类型（会议/动态/美食/失物/问答等）+ **经纬度字段**（WebGIS 地图点位对接）；发布 / 列表 / 详情 / 编辑 / 删除 / 我的发布，含作者权限校验、评论级联删除、磁盘图片同步清理
-2. **搜索筛选体系**：关键词搜索、分类与子分类筛选、type 类型筛选、热度（min_view_count）筛选、有无地点（has_location）筛选、作者筛选、排序参数（最新/热门/评论数）
-3. **评论模块**：评论发布、分页列表（order 排序）、单条+批量删除、is_author 标志
-4. **统计与榜单**：全站内容统计（含评论总数）、热门内容榜 `/api/contents/hot`、浏览量计数、summary 摘要字段
-5. **图片上传**：返回文件大小 size、超大文件预检（避免读入内存溢出）
-6. **安全加固**：XSS 防护（`_clean_text` HTML 转义）、输入清洗、空白拦截、校验去重、token 异常健壮化（FastAPI 依赖注入）
-7. **代码质量（10 轮重构）**：提取 `_require_content` / `_build_content_filters` / `_total_pages` / `_validate_sort` 等公共辅助函数、魔法数字常量化（MAX_KEYWORD_LENGTH 等）、类型注解补全、分页公共逻辑复用
-8. **接口文档**：`docs/API.md` 内容模块接口契约维护（11 次同步）
 
 **组长职责（xiaolizaimoyu）**：整体架构设计、分支管理与代码合并、主程序整合、Bug 修复与全链路联调、README 与交付文档整理。
 
