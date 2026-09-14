@@ -10,7 +10,9 @@ export const useUserStore = defineStore('user', {
   }),
 
   getters: {
-    isLoggedIn: (state) => !!state.token
+    isLoggedIn: (state) => !!state.token,
+    // 是否管理员：后端 user_public 返回 is_admin 字段
+    isAdmin: (state) => !!(state.userInfo && state.userInfo.is_admin)
   },
 
   actions: {
