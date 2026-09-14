@@ -116,3 +116,92 @@ def admin_delete_content(
     session.delete(content)
     session.commit()
     return ok({"id": content_id, "deleted": True}, "管理员已删除该帖")
+
+
+def _user_with_stats(user: User, session: Session) -> dict:
+    """用户信息 + 发帖数/评论数（管理员视角）。"""
+    content_count = session.exec(
+        select(func.count()).select_from(Content).where(Content.author_id == user.id)
+    ).one()
+    comment_count = session.exec(
+        select(func.count()).select_from(Comment).where(Comment.author_id == user.id)
+    ).one()
+    return {
+        "id": user.id,
+        "username": user.username,
+        "nickname": user.nickname,
+        "is_admin": getattr(user, "is_admin", False),
+        "content_count": content_count,
+        "comment_count": comment_count,
+        "created_at": user.created_at,
+    }
+
+
+@router.get("/users", summary="用户管理列表（分页）")
+def admin_list_users(
+    page: int = 1,
+    page_size: int = 20,
+    keyword: str = "",
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    """分页列出所有用户（含发帖数/评论数/is_admin），可按用户名/昵称搜索。"""
+    page = max(page, 1)
+    page_size = max(min(page_size, 100), 1)
+    stmt = select(User)
+    if keyword:
+        like = f"%{keyword}%"
+        stmt = stmt.where(User.username.contains(like) | User.nickname.contains(like))
+    total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
+    users = session.exec(
+        stmt.order_by(User.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    return ok({
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "list": [_user_with_stats(u, session) for u in users],
+    })
+
+
+@router.delete("/users/{user_id}", summary="删除用户")
+def admin_delete_user(
+    user_id: int,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    """管理员删除用户。禁止删除自己和其他管理员，避免误操作。
+
+    注：若该用户已发布内容/评论，外键约束可能阻止删除，返回 1007。
+    """
+    target = session.get(User, user_id)
+    if target is None:
+        raise BizError(1005, "用户不存在")
+    if target.id == admin.id:
+        raise BizError(1012, "不能删除当前登录的管理员账号")
+    if getattr(target, "is_admin", False):
+        raise BizError(1012, "不能删除其他管理员账号")
+    try:
+        session.delete(target)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise BizError(1007, "该用户存在关联内容/评论，无法直接删除")
+    return ok({"id": user_id, "deleted": True}, "用户已删除")
+
+
+@router.delete("/comments/{comment_id}", summary="删除任意评论")
+def admin_delete_comment(
+    comment_id: int,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    """管理员删除任意评论（内容审核）。"""
+    comment = session.get(Comment, comment_id)
+    if comment is None:
+        raise BizError(2001, "评论不存在或已被删除")
+    session.delete(comment)
+    session.commit()
+    return ok({"id": comment_id, "deleted": True}, "管理员已删除该评论")
