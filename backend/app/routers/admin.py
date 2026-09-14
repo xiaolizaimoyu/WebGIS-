@@ -7,13 +7,14 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.admin import get_current_admin
 from app.core.response import BizError, ok
 from app.db import get_session
-from app.models import Comment, Content, Favorite, Like, User
+from app.models import Comment, Content, Favorite, Like, LocationPoint, User
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
 
@@ -207,3 +208,53 @@ def admin_delete_comment(
     session.delete(comment)
     session.commit()
     return ok({"id": comment_id, "deleted": True}, "管理员已删除该评论")
+
+
+# ==================== 地点坐标管理（发布选点/地图点位校准） ====================
+
+class LocationSaveIn(BaseModel):
+    """新增或更新一个地点坐标（按名称 upsert）。"""
+
+    name: str
+    lng: float
+    lat: float
+
+
+@router.post("/locations", summary="新增/更新地点坐标")
+def admin_save_location(
+    data: LocationSaveIn,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    """按名称新增或更新地点坐标（同名覆盖），用于手动校准校园真实位置。"""
+    name = (data.name or "").strip()
+    if not name:
+        raise BizError(400, "地点名称不能为空")
+    if not (-180 <= data.lng <= 180) or not (-90 <= data.lat <= 90):
+        raise BizError(400, "经纬度超出有效范围")
+    row = session.exec(select(LocationPoint).where(LocationPoint.name == name)).first()
+    if row:
+        row.lng = data.lng
+        row.lat = data.lat
+        row.updated_at = datetime.now()
+        msg = "地点坐标已更新"
+    else:
+        max_sort = session.exec(select(func.max(LocationPoint.sort))).first() or 0
+        session.add(LocationPoint(name=name, lng=data.lng, lat=data.lat, sort=int(max_sort or 0) + 1))
+        msg = "地点坐标已新增"
+    session.commit()
+    return ok({"name": name, "lng": data.lng, "lat": data.lat}, msg)
+
+
+@router.delete("/locations/{loc_id}", summary="删除地点坐标")
+def admin_delete_location(
+    loc_id: int,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    row = session.get(LocationPoint, loc_id)
+    if row is None:
+        raise BizError(2002, "地点不存在或已被删除")
+    session.delete(row)
+    session.commit()
+    return ok({"id": loc_id, "deleted": True}, "地点坐标已删除")

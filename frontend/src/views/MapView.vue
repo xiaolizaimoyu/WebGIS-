@@ -6,6 +6,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import * as postApi from '@/api/post'
 import MapBrowser from '@/components/map/MapBrowser.vue'
+import { useLocations } from '@/composables/useLocations'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,8 +21,15 @@ const pendingNav =
     ? { lng: Number(route.query.navLng), lat: Number(route.query.navLat), title: route.query.navTitle || '' }
     : null
 
+// 帖子点位：发布时存的是估算坐标；若帖子地点名在真实坐标库中命中，则用真实坐标显示（不改库）
+const { resolve: resolvePlace } = useLocations()
 const list = computed(() =>
-  rawList.value.filter((p) => p.longitude != null && p.latitude != null)
+  rawList.value
+    .filter((p) => p.longitude != null && p.latitude != null)
+    .map((p) => {
+      const poi = resolvePlace(p.location_name)
+      return poi ? { ...p, longitude: poi.lng, latitude: poi.lat } : p
+    })
 )
 
 async function load() {

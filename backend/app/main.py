@@ -18,13 +18,49 @@ from app.core.admin import ensure_admin_account
 from app.core.config import UPLOAD_DIR
 from app.core.response import BizError, err
 from app.db import Session, create_db_and_tables, engine
+from app.models import LocationPoint
 from app.routers import post as post_router
 from app.routers import user as user_router
 from app.routers import admin as admin_router
+from app.routers import locations as locations_router
 from app.routers import social as social_router
 from app.routers import points as points_router
 from app.routers import mall as mall_router
 from app.routers import extensions as extensions_router
+
+# 默认校园地点库（与前端 const.js CAMPUS_PLACES 一致，作为初始化底子，
+# 管理员可在后台逐一点击地图校准为真实坐标）
+DEFAULT_CAMPUS_PLACES = [
+    {"name": "北门（新村西路）", "lng": 118.006732, "lat": 36.816583},
+    {"name": "图书馆", "lng": 118.006431, "lat": 36.815182},
+    {"name": "鸿远楼（行政楼）", "lng": 118.007535, "lat": 36.814284},
+    {"name": "一号教学楼", "lng": 118.008939, "lat": 36.81599},
+    {"name": "二号教学楼", "lng": 118.007836, "lat": 36.815786},
+    {"name": "三号教学楼", "lng": 118.005829, "lat": 36.813579},
+    {"name": "逸夫楼", "lng": 118.006331, "lat": 36.81268},
+    {"name": "第一食堂（一餐）", "lng": 118.010043, "lat": 36.815693},
+    {"name": "第二食堂（二餐）", "lng": 118.009541, "lat": 36.81309},
+    {"name": "第三食堂（三餐）", "lng": 118.005528, "lat": 36.815479},
+    {"name": "体育馆", "lng": 118.011146, "lat": 36.813595},
+    {"name": "田径场", "lng": 118.010344, "lat": 36.814493},
+    {"name": "学生公寓区", "lng": 118.008137, "lat": 36.816988},
+    {"name": "大学生事务中心", "lng": 118.006832, "lat": 36.814182},
+    {"name": "校医院", "lng": 118.005027, "lat": 36.814677},
+    {"name": "东门", "lng": 118.012752, "lat": 36.8144},
+    {"name": "南门", "lng": 118.007835, "lat": 36.812584},
+]
+
+
+def _init_location_points() -> None:
+    """地点库为空时写入默认校园地点，后续由管理员在后台校准为真实坐标。"""
+    from sqlmodel import select
+
+    with Session(engine) as session:
+        if session.exec(select(LocationPoint)).first() is not None:
+            return
+        for idx, p in enumerate(DEFAULT_CAMPUS_PLACES):
+            session.add(LocationPoint(name=p["name"], lng=p["lng"], lat=p["lat"], sort=idx))
+        session.commit()
 
 
 @asynccontextmanager
@@ -35,6 +71,8 @@ async def lifespan(_: FastAPI):
     # 确保内置管理员账号存在（admin/admin，is_admin=True）
     with Session(engine) as session:
         ensure_admin_account(session)
+    # 初始化默认地点坐标库
+    _init_location_points()
     yield
 
 
@@ -66,6 +104,7 @@ app.include_router(points_router.notify_router)
 app.include_router(mall_router.router)
 app.include_router(extensions_router.router, prefix="/api")
 app.include_router(admin_router.router)
+app.include_router(locations_router.router)
 
 # 上传图片的静态访问：/uploads/xxx.png
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")

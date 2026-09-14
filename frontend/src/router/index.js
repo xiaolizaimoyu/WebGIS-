@@ -26,6 +26,11 @@ const routes = [
     component: () => import('@/views/admin/AdminView.vue'),
     meta: { title: '管理后台', requiresAuth: true, admin: true }
   },
+  {
+    path: '/admin/locations',
+    component: () => import('@/views/admin/AdminLocationsView.vue'),
+    meta: { title: '地点坐标管理', requiresAuth: true, admin: true }
+  },
   // 业务页面统一套 MainLayout 外壳（顶部导航）
   {
     path: '/',

@@ -6,6 +6,7 @@ import * as questionApi from '@/api/question'
 import { formatTime } from '@/api/const'
 import { getMockQuestions } from '@/utils/mockData'
 import MapComponent from '@/components/MapComponent.vue'
+import { useLocations } from '@/composables/useLocations'
 import WeatherWidget from '@/components/WeatherWidget.vue'
 
 const router = useRouter()
@@ -59,13 +60,18 @@ function toDetail(id) {
 
 // 右侧地图
 const mapCenter = ref([118.001917, 36.814013])
-const mapMarkers = computed(() => [
-    { id: 1, lng: 118.000500, lat: 36.814800, title: '图书馆' },
-    { id: 2, lng: 118.004100, lat: 36.815300, title: '第一食堂' },
-    { id: 3, lng: 118.003600, lat: 36.812700, title: '第二食堂' },
-    { id: 4, lng: 118.005200, lat: 36.813200, title: '体育馆' },
-    { id: 5, lng: 118.000800, lat: 36.816200, title: '北门' },
-  ])
+// 地图点位：使用后台校准的真实坐标库（/api/locations）
+const { placeMap } = useLocations()
+const SHOW_PLACE_NAMES = ['图书馆', '第一食堂（一餐）', '第二食堂（二餐）', '体育馆', '北门（新村西路）']
+const mapMarkers = computed(() => {
+  const m = placeMap.value || {}
+  return SHOW_PLACE_NAMES.filter((n) => m[n]).map((n, i) => ({
+    id: i + 1,
+    lng: m[n].lng,
+    lat: m[n].lat,
+    title: n.replace(/（.*?）/, '')
+  }))
+})
 
 onMounted(load)
 </script>

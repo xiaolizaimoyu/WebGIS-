@@ -236,3 +236,18 @@ class CarpoolApplication(SQLModel, table=True):
     status: str = Field(default="pending", index=True,
                         description="pending 待确认 / approved 已同意 / rejected 已拒绝 / cancelled 已取消")
     created_at: datetime = Field(default_factory=datetime.now)
+
+
+# ==================== 地点坐标库（真实坐标手动校准） ====================
+
+class LocationPoint(SQLModel, table=True):
+    """地点坐标库：发布选点/地图点位使用的手动校准真实坐标。"""
+
+    __tablename__ = "location_points"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True, description="地点名称，如 第二食堂")
+    lng: float = Field(description="经度")
+    lat: float = Field(description="纬度")
+    sort: int = Field(default=0, description="排序号，越小越靠前")
+    updated_at: datetime = Field(default_factory=datetime.now)

@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import * as carpoolApi from '@/api/carpool'
 import { getMockCarpools } from '@/utils/mockData'
 import MapComponent from '@/components/MapComponent.vue'
+import { useLocations } from '@/composables/useLocations'
 import WeatherWidget from '@/components/WeatherWidget.vue'
 import { useUserStore } from '@/stores/user'
 
@@ -56,7 +57,18 @@ async function removeCarpool(c) {
 }
 
 const mapCenter = ref([118.001917, 36.814013])
-const mapMarkers = computed(() => [])
+// 地图点位：使用后台校准的真实坐标库（/api/locations）
+const { placeMap } = useLocations()
+const SHOW_PLACE_NAMES = ['图书馆', '第一食堂（一餐）', '第二食堂（二餐）', '体育馆', '北门（新村西路）']
+const mapMarkers = computed(() => {
+  const m = placeMap.value || {}
+  return SHOW_PLACE_NAMES.filter((n) => m[n]).map((n, i) => ({
+    id: i + 1,
+    lng: m[n].lng,
+    lat: m[n].lat,
+    title: n.replace(/（.*?）/, '')
+  }))
+})
 
 onMounted(load)
 </script>

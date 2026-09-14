@@ -11,14 +11,26 @@ import { ElMessage } from 'element-plus'
 import * as postApi from '@/api/post'
 import LocationPicker from '@/components/map/LocationPicker.vue' // 前端A的Leaflet选点组件（免key）
 import { CAMPUS_PLACES, TYPE_MAP } from '@/api/const'
+import { getLocations } from '@/api/locations'
 
 const route = useRoute()
 const router = useRouter()
 const formRef = ref()
 const submitting = ref(false)
 
-// 校园地点选项（真实校园位置：如 二餐 → 自动定位到第二食堂坐标）
-const placeOptions = CAMPUS_PLACES.map((p) => ({ value: p.name, lng: p.lng, lat: p.lat, label: p.name }))
+// 校园地点选项：优先使用后台校准的真实坐标库（/api/locations），未加载到时回退默认库
+const placeOptions = ref(CAMPUS_PLACES.map((p) => ({ value: p.name, lng: p.lng, lat: p.lat, label: p.name })))
+async function loadPlaces() {
+  try {
+    const data = await getLocations()
+    if (data && data.length) {
+      placeOptions.value = data.map((p) => ({ value: p.name, lng: p.lng, lat: p.lat, label: p.name }))
+    }
+  } catch {
+    /* 接口不可用时保持默认地点库 */
+  }
+}
+loadPlaces()
 
 const isEdit = computed(() => !!route.params.id)
 const editId = computed(() => (route.params.id ? Number(route.params.id) : null))

@@ -53,6 +53,8 @@ function onCommand(cmd) {
     router.push('/mall')
   } else if (cmd === 'admin') {
     router.push('/admin')
+  } else if (cmd === 'admin-locations') {
+    router.push('/admin/locations')
   } else if (cmd === 'logout') {
     store.logout()
     ElMessage.success('已退出登录')
@@ -203,7 +205,10 @@ onMounted(() => {
                 <span>📝 我的发布</span>
               </el-dropdown-item>
               <el-dropdown-item v-if="isAdmin" command="admin">
-                <span>🛡️ 管理后台</span>
+  <span>🛡️ 管理后台</span>
+</el-dropdown-item>
+              <el-dropdown-item v-if="isAdmin" command="admin-locations">
+                <span>📍 地点坐标管理</span>
               </el-dropdown-item>
               <el-dropdown-item command="mall">
                 <span>🎁 积分商城</span>
