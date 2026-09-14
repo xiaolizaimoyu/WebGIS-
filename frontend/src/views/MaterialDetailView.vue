@@ -79,21 +79,16 @@ async function handleLike() {
   liking.value = true
   try {
     const data = await materialApi.likeMaterial(materialId)
-    // 后端返回最新点赞数；同一账号最多点赞 1 次
-    material.value.likes = data?.likes ?? (material.value.likes || 0) + 1
-    liked.value = data?.liked ?? true
-    ElMessage.success('点赞成功')
-  } catch (e) {
-    const msg = e?.msg || ''
-    if (msg.includes('已点过赞')) {
-      // 已点赞：同步为已赞状态并禁用按钮，不重复计数
-      liked.value = true
-      ElMessage.info('您已点过赞')
-    } else {
-      material.value.likes = (material.value.likes || 0) + 1
-      liked.value = true
-      ElMessage.success('点赞成功')
-    }
+    // 点赞/取消切换：以服务端返回的 liked 为准，避免重复计数
+    material.value.likes = data?.likes ?? Math.max(0, (material.value.likes || 0) + (liked.value ? -1 : 1))
+    const nowLiked = data?.liked ?? !liked.value
+    liked.value = nowLiked
+    ElMessage.success(nowLiked ? '点赞成功' : '已取消点赞')
+  } catch {
+    // 网络异常时本地乐观切换，杜绝 NaN
+    material.value.likes = Math.max(0, (material.value.likes || 0) + (liked.value ? -1 : 1))
+    liked.value = !liked.value
+    ElMessage.success('操作成功（网络异常，已本地更新）')
   } finally {
     liking.value = false
   }
@@ -148,7 +143,7 @@ onMounted(loadDetail)
         <el-button type="primary" size="large" @click="handleDownload">
           ⬇️ 下载资料
         </el-button>
-        <el-button size="large" :loading="liking" :disabled="liked" @click="handleLike">
+        <el-button size="large" :loading="liking" :type="liked ? 'success' : 'primary'" plain @click="handleLike">
           {{ liked ? '✅ 已点赞' : '❤️ 点赞' }} ({{ material.likes || 0 }})
         </el-button>
         <el-button size="large" @click="router.back()">
