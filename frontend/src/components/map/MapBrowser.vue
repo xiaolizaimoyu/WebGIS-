@@ -93,6 +93,23 @@ onBeforeUnmount(() => {
     map = null
   }
 })
+
+// 对外：定位到指定坐标（详情页「地图导航」跳转消费）
+defineExpose({
+  setCenter: (lng, lat, zoom) => {
+    if (map) {
+      map.setZoomAndCenter(zoom || 17, [Number(lng), Number(lat)])
+      // 高亮：在目标位置叠加一个临时放大点位
+      const hl = new AMap.Marker({
+        position: [Number(lng), Number(lat)],
+        content: circleSvg('#f56c6c'),
+        offset: new AMap.Pixel(-11, -11)
+      })
+      map.add(hl)
+      setTimeout(() => map.remove(hl), 4000)
+    }
+  }
+})
 </script>
 
 <template>

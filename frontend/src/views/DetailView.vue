@@ -56,11 +56,10 @@ async function loadAll() {
 }
 
 // 帖子带经纬度时展示「地图导航」入口（规划书 5-2：详情页导航按钮触发地图跳转定位）
-// 契约：携带坐标跳转到首页，前端 A 的地图组件读取 route.query 完成定位 / 模拟导航；
-// 地图组件未就绪时仅回到首页，不会报错。
+// 契约：携带坐标跳转到校园地图页（首页），地图组件读取 route.query 完成定位高亮。
 function toMapNav() {
   router.push({
-    path: '/',
+    path: '/map',
     query: {
       navLng: content.value.longitude,
       navLat: content.value.latitude,

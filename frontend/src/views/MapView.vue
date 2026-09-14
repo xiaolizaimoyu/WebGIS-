@@ -2,15 +2,23 @@
 // 校园地图页（归属：前端 A）——全屏地图 + 分类点位浏览（无需登录）
 // 数据来自内容列表接口（返回带经纬度的帖子）；点击标记弹窗可跳详情。
 // TODO(前端A)：左右双栏布局、模拟导航、热力图、按真实学校坐标替换 MAP_CONFIG.center
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import * as postApi from '@/api/post'
 import MapBrowser from '@/components/map/MapBrowser.vue'
 
+const route = useRoute()
 const router = useRouter()
+const browserRef = ref(null)
 const rawList = ref([])
 const loading = ref(false)
 const errText = ref('')
+
+// 详情页导航请求：携带坐标跳回地图页，此处消费并定位（原首页逻辑迁移）
+const pendingNav =
+  route.query.navLng != null && route.query.navLat != null
+    ? { lng: Number(route.query.navLng), lat: Number(route.query.navLat), title: route.query.navTitle || '' }
+    : null
 
 const list = computed(() =>
   rawList.value.filter((p) => p.longitude != null && p.latitude != null)
@@ -30,6 +38,18 @@ async function load() {
   }
 }
 
+// 点位渲染完成后消费导航定位
+watch(
+  list,
+  async () => {
+    await nextTick()
+    if (pendingNav && browserRef.value && typeof browserRef.value.setCenter === 'function') {
+      browserRef.value.setCenter(pendingNav.lng, pendingNav.lat, 17)
+    }
+  },
+  { deep: true }
+)
+
 onMounted(load)
 </script>
 
@@ -44,7 +64,7 @@ onMounted(load)
     </div>
 
     <div class="map-body">
-      <MapBrowser :points="list" />
+      <MapBrowser ref="browserRef" :points="list" />
       <div class="status-line">
         <span v-if="errText" class="err">{{ errText }}</span>
         <span v-else-if="loading" class="loading-tip">正在加载点位…</span>
