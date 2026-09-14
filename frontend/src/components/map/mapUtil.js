@@ -1,32 +1,28 @@
-// 地图内核工具（归属：前端 A）
-// 说明：本文件 + components/map/ 下两个组件是“对地图库唯一有依赖”的地方。
-//       将来若升级到高德 JS API，只需替换这几处内核，页面（MapView / PublishView）不用改。
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-import { MAP_CONFIG, TYPE_MAP } from '@/api/const'
+// 地图内核工具（高德 JS API 2.0 版）
+// 说明：本文件 + components/map/ 下两个组件是“对地图库唯一依赖”的地方。
+//       坐标统一为 GCJ-02（高德火星坐标），与瓦片/定位全链路一致。
+import { loadAMap } from './amap-loader'
+import { CAMPUS_CENTER, TYPE_MAP } from '@/api/const'
 
-export { MAP_CONFIG }
+// 兼容导出（高德版不再使用 tileUrl，保留对象避免破坏旧引用）
+export const MAP_CONFIG = {
+  center: [CAMPUS_CENTER.lat, CAMPUS_CENTER.lng],
+  zoom: 16,
+  maxZoom: 18
+}
 
 // 分类 -> 颜色/文案
 export const colorOf = (type) => TYPE_MAP[type]?.mapColor || '#8a8f98'
 export const labelOf = (type) => TYPE_MAP[type]?.label || type || '未知'
 
-// 瓦片源说明：
-// 默认高德栅格瓦片（国内加载快、中文标注）。subdomains 用 1-4。
-// 如需换回 OpenStreetMap：把 const.js MAP_CONFIG 的 tileUrl 换为
-//   'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'，subdomains 留空数组，attribution 填 OSM 版权。
-export function initMap(containerEl, cfg = {}) {
-  const map = L.map(containerEl, {
-    zoomControl: false,
-    attributionControl: true
+// 初始化高德地图（异步，需 await）
+export async function initMap(containerEl, cfg = {}) {
+  const AMap = await loadAMap()
+  const map = new AMap.Map(containerEl, {
+    center: cfg.center || [CAMPUS_CENTER.lng, CAMPUS_CENTER.lat],
+    zoom: cfg.zoom || 16,
+    mapStyle: 'amap://styles/normal'
   })
-  L.control.zoom({ position: 'topright' }).addTo(map)
-  L.tileLayer(cfg.tileUrl || MAP_CONFIG.tileUrl, {
-    attribution: cfg.tileAttribution !== undefined ? cfg.tileAttribution : MAP_CONFIG.tileAttribution,
-    maxZoom: cfg.maxZoom || MAP_CONFIG.maxZoom || 19,
-    subdomains: cfg.subdomains || MAP_CONFIG.subdomains || []
-  }).addTo(map)
-  map.setView(cfg.center || MAP_CONFIG.center, cfg.zoom || MAP_CONFIG.zoom)
   return map
 }
 
@@ -38,37 +34,33 @@ export function buildPopupEl(item, onDetail) {
 
   const head = document.createElement('div')
   head.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px'
-  const dot = document.createElement('span')
-  dot.style.cssText = `width:10px;height:10px;border-radius:50%;background:${colorOf(item.type)};display:inline-block`
   const tag = document.createElement('span')
-  tag.style.cssText = 'font-size:12px;color:#909399'
   tag.textContent = labelOf(item.type)
-  head.append(dot, tag)
-  wrap.append(head)
-
+  tag.style.cssText =
+    'font-size:11px;color:#fff;background:' + colorOf(item.type) + ';padding:1px 8px;border-radius:10px'
   const title = document.createElement('div')
-  title.style.cssText = 'font-size:15px;font-weight:600;color:#303133;margin-bottom:4px'
   title.textContent = item.title || ''
-  wrap.append(title)
-
-  if (item.body) {
-    const body = document.createElement('div')
-    body.style.cssText = 'font-size:13px;color:#606266;line-height:1.5;margin-bottom:6px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical'
-    body.textContent = String(item.body).slice(0, 90)
-    wrap.append(body)
-  }
+  title.style.cssText = 'font-size:14px;font-weight:600;color:#303133;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'
+  head.appendChild(tag)
+  head.appendChild(title)
 
   const meta = document.createElement('div')
-  meta.style.cssText = 'font-size:12px;color:#a8abb2;margin-bottom:8px'
-  meta.textContent = `${item.author_name || '匿名'} · ${String(item.created_at || '').replace('T', ' ').slice(0, 16)}`
-  wrap.append(meta)
+  meta.style.cssText = 'font-size:12px;color:#909399;margin-bottom:6px'
+  meta.textContent = [item.author_name, item.created_at].filter(Boolean).join(' · ')
 
-  const link = document.createElement('a')
-  link.href = 'javascript:void(0)'
-  link.textContent = '查看详情 →'
-  link.style.cssText = 'font-size:13px;color:#1d6df0;cursor:pointer'
-  link.onclick = () => onDetail(item.id)
-  wrap.append(link)
+  const body = document.createElement('div')
+  body.style.cssText = 'font-size:12px;color:#606266;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden'
+  body.textContent = item.body || ''
 
+  const btn = document.createElement('div')
+  btn.textContent = '查看详情 →'
+  btn.style.cssText =
+    'font-size:12px;color:#1d6df0;cursor:pointer;text-align:right;padding-top:4px;border-top:1px solid #f0f0f0'
+  btn.onclick = () => onDetail && onDetail(item.id)
+
+  wrap.appendChild(head)
+  wrap.appendChild(meta)
+  wrap.appendChild(body)
+  wrap.appendChild(btn)
   return wrap
 }
