@@ -207,6 +207,7 @@ def user_public(user: User) -> dict:
         "username": user.username,
         "nickname": user.nickname,
         "avatar": user.avatar,
+        "is_admin": getattr(user, "is_admin", False),
         "created_at": user.created_at,
     }
 
