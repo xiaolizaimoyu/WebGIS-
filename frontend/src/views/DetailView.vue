@@ -89,6 +89,21 @@ async function sendComment() {
   }
 }
 
+// 删除自己的评论（仅本人可见删除按钮）
+const deletingId = ref(0)
+async function removeComment(c) {
+  deletingId.value = c.id
+  try {
+    await postApi.deleteComment(contentId, c.id)
+    ElMessage.success('评论已删除')
+    await loadComments()
+  } catch (e) {
+    // request.js 已弹错误提示
+  } finally {
+    deletingId.value = 0
+  }
+}
+
 // ===== 点赞 / 收藏（真实对接后端 social 接口） =====
 const liked = ref(false)
 const favorited = ref(false)
@@ -265,6 +280,17 @@ onUnmounted(() => {
             <div class="who">
               <span class="nick">{{ c.author_name }}</span>
               <span class="time">{{ formatTime(c.created_at) }}</span>
+              <el-button
+                v-if="c.is_author"
+                size="small"
+                text
+                type="danger"
+                :loading="deletingId === c.id"
+                class="del-comment"
+                @click="removeComment(c)"
+              >
+                删除
+              </el-button>
             </div>
             <div class="text">{{ c.body }}</div>
           </div>
@@ -438,6 +464,10 @@ onUnmounted(() => {
 .time {
   color: #a8abb2;
   font-size: 12px;
+}
+
+.del-comment {
+  margin-left: auto;
 }
 
 .text {

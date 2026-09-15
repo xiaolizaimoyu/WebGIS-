@@ -24,6 +24,9 @@ export const listComments = (id) => request.get(`/contents/${id}/comments`)
 // 发表评论：body 为纯文本
 export const createComment = (id, body) => request.post(`/contents/${id}/comments`, { body })
 
+// 删除自己的评论（需登录，仅作者本人可删）
+export const deleteComment = (id, commentId) => request.delete(`/contents/${id}/comments/${commentId}`)
+
 // 我的发布列表：{ page, size } -> { total, items }（需登录）
 export const mineContents = (params) => request.get('/contents/mine', { params })
 
