@@ -53,28 +53,24 @@ function resolve(name) {
   return target ? placeMap.value[target] || null : null
 }
 
-// 校园中心（GCJ-02），未录入地点在此周边确定性随机散布
+// 校园中心（GCJ-02），仅在地点库为空时兜底使用
 const MAP_CENTER = { lng: 118.007853, lat: 36.814398 }
-
-// 线性同余伪随机：同一帖子永远得到同一组偏移，刷新不乱跳
-function seededOffset(seed) {
-  const a = (seed * 9301 + 49297) % 233280
-  const b = (seed * 49297 + 9301) % 233280
-  return {
-    dLng: ((a / 233280) - 0.5) * 0.014, // ±0.007° ≈ ±700m
-    dLat: ((b / 233280) - 0.5) * 0.01 // ±0.005° ≈ ±550m
-  }
-}
 
 // 帖子 → 地图坐标：
 // 1) 地点名命中坐标库（含别名）→ 真实坐标；
-// 2) 未录入 → 按帖子 id 确定性伪随机散布校园周边。
+// 2) 未录入地点名 → 从地点库中按帖子 id 确定性选取一个真实点位（不再随机散布坐标）；
+// 3) 地点库为空 → 回退校园中心。
 function resolveContentPoint(item) {
   if (!item) return null
   const poi = resolve(item.location_name)
   if (poi) return { lng: poi.lng, lat: poi.lat }
-  const off = seededOffset(item.id || Math.floor(Math.random() * 100000))
-  return { lng: MAP_CENTER.lng + off.dLng, lat: MAP_CENTER.lat + off.dLat }
+  const list = Object.values(placeMap.value || {})
+  if (list.length) {
+    const seed = ((item.id || 1) * 2654435761) >>> 0
+    const pick = list[seed % list.length]
+    return { lng: pick.lng, lat: pick.lat }
+  }
+  return { lng: MAP_CENTER.lng, lat: MAP_CENTER.lat }
 }
 
 export { promise as locationsReady }
