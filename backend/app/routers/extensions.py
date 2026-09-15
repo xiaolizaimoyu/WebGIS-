@@ -139,6 +139,23 @@ def adopt_answer(qid: int, aid: int, user: User = Depends(get_current_user)):
     return ok({"solved": True, "adopted": True, "answer_id": aid})
 
 
+@router.delete("/questions/{qid}/answers/{aid}", summary="删除回答（仅作者本人）")
+def delete_answer(qid: int, aid: int, user: User = Depends(get_current_user)):
+    q = next((q for q in _questions if q["id"] == qid), None)
+    if not q:
+        raise BizError(404, "问题不存在")
+    answers = _answers.get(qid, [])
+    a = next((x for x in answers if x["id"] == aid), None)
+    if not a:
+        raise BizError(404, "回答不存在或已被删除")
+    if a.get("author_id") != user.id:
+        raise BizError(403, "只能删除自己发表的回答")
+    answers.remove(a)
+    # 同步回答计数
+    q["answer_count"] = max(0, q.get("answer_count", 0) - 1)
+    return ok({"id": aid, "deleted": True}, "回答已删除")
+
+
 # ==================== 学习资料 ====================
 
 @router.get("/materials", summary="资料列表")

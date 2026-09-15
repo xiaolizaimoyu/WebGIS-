@@ -18,3 +18,6 @@ export const createAnswer = (questionId, body) => request.post(`/questions/${que
 
 // 采纳回答
 export const adoptAnswer = (questionId, answerId) => request.post(`/questions/${questionId}/answers/${answerId}/adopt`)
+
+// 删除自己的回答（需登录，仅作者本人可删）
+export const deleteAnswer = (questionId, answerId) => request.delete(`/questions/${questionId}/answers/${answerId}`)

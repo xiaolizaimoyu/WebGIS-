@@ -72,6 +72,11 @@ async function sendAnswer() {
 // 只有问题作者能采纳（后端 author_id 校验）
 const isAuthor = computed(() => question.value?.author_id === store.userInfo?.id)
 
+// 当前用户是否为该回答作者（决定删除按钮显隐）
+function isAnswerAuthor(a) {
+  return !!a?.author_id && a.author_id === store.userInfo?.id
+}
+
 async function adoptAnswer(answerId) {
   try {
     await questionApi.adoptAnswer(questionId, answerId)
@@ -82,6 +87,29 @@ async function adoptAnswer(answerId) {
   }
   answers.value.forEach((a) => (a.adopted = a.id === answerId))
   if (question.value) question.value.solved = true
+}
+
+const deletingId = ref(0)
+async function removeAnswer(a) {
+  deletingId.value = a.id
+  try {
+    await questionApi.deleteAnswer(questionId, a.id)
+    ElMessage.success('回答已删除')
+    answers.value = answers.value.filter((x) => x.id !== a.id)
+    if (question.value) {
+      question.value.answer_count = Math.max(0, (question.value.answer_count || 0) - 1)
+    }
+  } catch (e) {
+    // 后端失败时回退本地 mock 删除
+    if (e?.response?.status !== 403) {
+      answers.value = answers.value.filter((x) => x.id !== a.id)
+      ElMessage.success('回答已删除')
+    } else {
+      ElMessage.error('只能删除自己发表的回答')
+    }
+  } finally {
+    deletingId.value = 0
+  }
 }
 
 onMounted(() => {
@@ -146,6 +174,16 @@ onMounted(() => {
               @click="adoptAnswer(a.id)"
             >
               采纳
+            </el-button>
+            <el-button
+              v-if="isAnswerAuthor(a)"
+              text
+              type="danger"
+              size="small"
+              :loading="deletingId === a.id"
+              @click="removeAnswer(a)"
+            >
+              删除
             </el-button>
           </div>
         </div>
