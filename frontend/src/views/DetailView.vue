@@ -2,7 +2,7 @@
 // 详情页（归属：前端 B）——内容详情 + 评论区
 // 未登录用户可浏览，发表评论会被引导到登录页
 // 已加固：加载中显示骨架、接口失败显示错误+重试，不再出现空白页
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as postApi from '@/api/post'
@@ -20,6 +20,7 @@ const comments = ref([])
 const commentTotal = ref(0)
 const commentText = ref('')
 const sending = ref(false)
+const replyTo = ref(null) // 当前回复的对象 { id, name }，null=普通评论
 const loading = ref(true)
 const loadFailed = ref(false)
 const showBackTop = ref(false) // 回到顶部按钮显隐
@@ -68,6 +69,26 @@ function toMapNav() {
   })
 }
 
+// 楼层回复（纯前端方案：@前缀+UI提示，不需后端改）
+function setReply(c) {
+  replyTo.value = { id: c.id, name: c.author_name }
+  // 自动聚焦评论框
+  nextTick(() => {
+    document.querySelector('.comment-input textarea')?.focus()
+  })
+}
+
+function cancelReply() {
+  replyTo.value = null
+}
+
+// 解析评论 body 中的 @前缀，返回 { replyName, text }
+function parseReply(body) {
+  if (!body) return { replyName: null, text: '' }
+  const m = body.match(/^@(.+?)\s(.+)/s)
+  return m ? { replyName: m[1], text: m[2] } : { replyName: null, text: body }
+}
+
 async function sendComment() {
   if (!store.isLoggedIn) {
     ElMessage.warning('请先登录后再评论')
@@ -76,10 +97,13 @@ async function sendComment() {
   }
   const text = commentText.value.trim()
   if (!text) return
+  // 回复模式：body 前面加 @被回复人 前缀
+  const payload = replyTo.value ? `@${replyTo.value.name} ${text}` : text
   sending.value = true
   try {
-    await postApi.createComment(contentId, text)
+    await postApi.createComment(contentId, payload)
     commentText.value = ''
+    replyTo.value = null
     ElMessage.success('评论成功')
     await loadComments()
   } catch (e) {
@@ -261,12 +285,17 @@ onUnmounted(() => {
         <template #header>评论（{{ commentTotal }}）</template>
 
         <div class="comment-input">
+          <!-- 回复提示条：显示当前在回复谁 -->
+          <div v-if="replyTo" class="reply-bar">
+            <span>回复 @{{ replyTo.name }}：</span>
+            <el-button text size="small" @click="cancelReply">取消回复</el-button>
+          </div>
           <el-input
             v-model="commentText"
             type="textarea"
             :rows="2"
             maxlength="500"
-            placeholder="友善评论，理性交流……"
+            :placeholder="replyTo ? `回复 @${replyTo.name}…` : '友善评论，理性交流……'"
           />
           <div class="input-actions">
             <el-button type="primary" :loading="sending" @click="sendComment">发表评论</el-button>
@@ -291,8 +320,22 @@ onUnmounted(() => {
               >
                 删除
               </el-button>
+              <el-button
+                v-if="store.isLoggedIn"
+                size="small"
+                text
+                type="primary"
+                class="reply-btn"
+                @click="setReply(c)"
+              >
+                回复
+              </el-button>
             </div>
-            <div class="text">{{ c.body }}</div>
+            <!-- 回复显示：@前缀高亮为标签 -->
+            <div class="text">
+              <span v-if="parseReply(c.body).replyName" class="reply-tag">@{{ parseReply(c.body).replyName }}</span>
+              {{ parseReply(c.body).text }}
+            </div>
           </div>
         </div>
       </el-card>
@@ -468,6 +511,28 @@ onUnmounted(() => {
 
 .del-comment {
   margin-left: auto;
+}
+
+.reply-btn {
+  margin-left: 4px;
+}
+
+.reply-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  padding: 4px 12px;
+  background: #f0f7ff;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #409eff;
+}
+
+.reply-tag {
+  color: #409eff;
+  font-weight: 600;
+  margin-right: 4px;
 }
 
 .text {
