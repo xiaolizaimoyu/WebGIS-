@@ -3,14 +3,45 @@
 // - 无 :id 路由 = 新建发布
 // - 带 :id 路由（/publish/:id）＝ 编辑已有内容（仅作者可进入，编辑由后端校验权限）
 // 说明：本路由 requiresAuth，未登录会被全局守卫拦截到登录页
-// TODO(前端B)：富文本编辑器、发布后二次编辑预览等扩展点
 // 地点：可选校园地点（如 二餐）自动定位，也可在地图上手动点击拾取精确位置
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import * as postApi from '@/api/post'
 import LocationPicker from '@/components/map/LocationPicker.vue' // 前端A的Leaflet选点组件（免key）
 import { CAMPUS_PLACES, TYPE_MAP } from '@/api/const'
+
+// ===== 正文 Markdown 工具栏（前端 B）=====
+// 纯文本 textarea + 插入标记，不引第三方编辑器，轻量无依赖
+const bodyRef = ref(null) // textarea DOM 引用
+
+function insertMarkdown(before, after = '') {
+  const ta = bodyRef.value?.$el?.querySelector('textarea') || bodyRef.value?.$el
+  if (!ta) return
+  const start = ta.selectionStart
+  const end = ta.selectionEnd
+  const sel = form.body.substring(start, end)
+  const insert = before + sel + after
+  form.body = form.body.substring(0, start) + insert + form.body.substring(end)
+  nextTick(() => {
+    ta.focus()
+    ta.setSelectionRange(start + before.length, start + before.length + sel.length)
+  })
+}
+
+const mdTools = [
+  { icon: 'B', title: '加粗', before: '**', after: '**' },
+  { icon: 'I', title: '斜体', before: '*', after: '*' },
+  { icon: '~', title: '删除线', before: '~~', after: '~~' },
+  { icon: '•', title: '无序列表', before: '- ' },
+  { icon: '1.', title: '有序列表', before: '1. ' },
+  { icon: '"', title: '引用', before: '> ' },
+  { icon: '🔗', title: '链接', before: '[', after: '](https://)' }
+]
+
+function onMdTool(tool) {
+  insertMarkdown(tool.before, tool.after)
+}
 import { getLocations } from '@/api/locations'
 
 const route = useRoute()
@@ -239,7 +270,21 @@ async function submit() {
         </el-form-item>
 
         <el-form-item label="正文" prop="body">
+          <!-- Markdown 工具栏 -->
+          <div class="md-toolbar">
+            <button
+              v-for="tool in mdTools"
+              :key="tool.title"
+              type="button"
+              class="md-btn"
+              :title="tool.title"
+              @click.prevent="onMdTool(tool)"
+            >
+              {{ tool.icon }}
+            </button>
+          </div>
           <el-input
+            ref="bodyRef"
             v-model="form.body"
             type="textarea"
             :rows="6"
@@ -398,5 +443,39 @@ async function submit() {
   font-size: 13px;
   padding-top: 8px;
   border-top: 1px solid #ebeef5;
+}
+
+/* Markdown 工具栏 */
+.md-toolbar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding: 4px 6px;
+  background: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px 4px 0 0;
+  border-bottom: none;
+}
+
+.md-btn {
+  min-width: 28px;
+  height: 26px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #606266;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+}
+
+.md-btn:hover {
+  background: #fff;
+  border-color: #d0d3d9;
+  color: #409eff;
 }
 </style>
