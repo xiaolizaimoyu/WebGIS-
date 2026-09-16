@@ -213,7 +213,20 @@ onMounted(() => {
           </el-button>
         </div>
 
-        <div v-loading="loading" class="feed">
+        <!-- 加载骨架：避免 v-loading 旋转白屏 -->
+        <div v-if="loading" class="skeleton-box">
+          <el-card v-for="i in 3" :key="i" class="item-card" shadow="never">
+            <el-skeleton :rows="3" animated />
+          </el-card>
+        </div>
+
+        <div v-else-if="!list.length" class="empty-box">
+          <el-empty description="你还没有发布过内容" :image-size="100">
+            <el-button type="primary" round @click="router.push('/publish')">去发布第一条</el-button>
+          </el-empty>
+        </div>
+
+        <div v-else class="feed">
           <el-card
             v-for="c in list"
             :key="c.id"
@@ -250,10 +263,6 @@ onMounted(() => {
               <el-button size="small" type="danger" plain @click="removeItem(c.id, c.title)">删除</el-button>
             </div>
           </el-card>
-
-          <el-empty v-if="!loading && !list.length" description="你还没有发布过内容">
-            <el-button type="primary" @click="router.push('/publish')">去发布第一条</el-button>
-          </el-empty>
         </div>
 
         <div v-if="total > size" class="pager">
@@ -288,7 +297,20 @@ onMounted(() => {
           <span class="count">共收藏 {{ favTotal }} 条</span>
         </div>
 
-        <div v-loading="favLoading" class="feed">
+        <!-- 收藏加载骨架 -->
+        <div v-if="favLoading" class="skeleton-box">
+          <el-card v-for="i in 3" :key="i" class="item-card" shadow="never">
+            <el-skeleton :rows="3" animated />
+          </el-card>
+        </div>
+
+        <div v-else-if="!favList.length" class="empty-box">
+          <el-empty description="还没有收藏内容，去详情页点亮 ⭐ 收藏吧" :image-size="100">
+            <el-button type="warning" round @click="router.push('/posts')">去逛逛帖子</el-button>
+          </el-empty>
+        </div>
+
+        <div v-else class="feed">
           <el-card v-for="item in favList" :key="item.id" class="item-card" shadow="hover">
             <div class="item-body" @click="toDetail(item.id)">
               <div class="badge">
@@ -305,10 +327,6 @@ onMounted(() => {
               <el-button size="small" type="warning" plain @click="unfav(item)">取消收藏</el-button>
             </div>
           </el-card>
-
-          <el-empty v-if="!favLoading && !favList.length" description="还没有收藏内容，去详情页点亮 ⭐ 收藏吧">
-            <el-button type="primary" @click="router.push('/')">去首页逛逛</el-button>
-          </el-empty>
         </div>
 
         <div v-if="favTotal > size" class="pager">
@@ -473,5 +491,16 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   padding: 10px 0 20px;
+}
+
+/* 加载骨架 / 空状态 */
+.skeleton-box {
+  display: grid;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.empty-box {
+  padding: 30px 0;
 }
 </style>
