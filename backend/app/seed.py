@@ -211,6 +211,17 @@ def run(reset: bool = False) -> None:
 
         # 0) 保护：非 --reset 且 demo 用户已存在 -> 保留积分/签到/帖子，只补缺失的商城与拼车
         if demo_users and not reset:
+            # 0.1) 兼容修复：历史库中可能残留明文密码（旧版本 seed 遗留），
+            #      非 bcrypt 哈希的账号一律重写为 bcrypt，否则这些账号将无法登录。
+            fixed = 0
+            for u in demo_users:
+                h = u.password_hash or ""
+                if not h.startswith("$2"):
+                    u.password_hash = hash_password(DEMO_PASSWORD)
+                    fixed += 1
+            if fixed:
+                session.commit()
+                print(f"[seed] 已修复 {fixed} 个演示账号的明文密码为 bcrypt 哈希")
             old_goods = session.exec(select(MallGoods).where(MallGoods.name.like("演示%"))).all()
             has_carpool = session.exec(select(Carpool)).first()
             if not old_goods:
