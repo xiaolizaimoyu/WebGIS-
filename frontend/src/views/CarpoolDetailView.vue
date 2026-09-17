@@ -1,5 +1,6 @@
 ﻿<script setup>
 // 拼车详情页（前端 C）——申请提交后待车主确认；车主可同意/拒绝；申请人可取消
+// 功能：① 申请加入拼车（待车主确认，可取消）② 车主同意/拒绝申请 ③ 行程路线地图（出发/到达标记+橙色虚线）④ 与发起人聊天（演示）
 import { onMounted, ref, reactive, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
