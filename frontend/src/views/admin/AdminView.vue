@@ -21,17 +21,6 @@ const contentList = ref({ total: 0, list: [] })
 const userQuery = reactive({ page: 1, page_size: 10, keyword: '' })
 const userList = ref({ total: 0, list: [] })
 
-// 订单发货管理
-const orderQuery = reactive({ page: 1, page_size: 10, status: '' })
-const orderList = ref({ total: 0, list: [] })
-
-const ORDER_STATUS_LABEL = {
-  pending: { label: '待发货', type: 'warning' },
-  shipping: { label: '配送中', type: 'primary' },
-  delivered: { label: '已送达', type: 'success' },
-  cancelled: { label: '已取消', type: 'info' }
-}
-
 const TYPE_LABEL = {
   meeting: '校园会议', news: '校园动态', food: '校园美食', lost: '失物招领'
 }
@@ -58,32 +47,6 @@ async function loadUsers() {
     if (userQuery.keyword) params.keyword = userQuery.keyword
     const data = await adminApi.listUsers(params)
     userList.value = data
-  } catch {}
-}
-
-async function loadOrders() {
-  try {
-    const params = { page: orderQuery.page, page_size: orderQuery.page_size }
-    if (orderQuery.status) params.status = orderQuery.status
-    const data = await adminApi.listOrders(params)
-    orderList.value = data
-  } catch {}
-}
-
-// 管理员更新订单状态：pending->shipping->delivered，或 cancelled
-async function onUpdateOrderStatus(row, status) {
-  const label = ORDER_STATUS_LABEL[status]?.label
-  try {
-    await ElMessageBox.confirm(
-      `确定将订单 #${row.id}「${row.goods_name}」状态改为「${label}」？`,
-      '发货状态更新',
-      { type: 'warning', confirmButtonText: '确认更新', cancelButtonText: '取消' }
-    )
-  } catch { return }
-  try {
-    await adminApi.updateOrderStatus(row.id, status)
-    ElMessage.success('状态已更新')
-    loadOrders()
   } catch {}
 }
 
@@ -129,7 +92,6 @@ onMounted(() => {
   loadStats()
   loadContents()
   loadUsers()
-  loadOrders()
 })
 </script>
 
@@ -220,47 +182,6 @@ onMounted(() => {
             :total="userList.total"
             layout="prev, pager, next, total"
             @current-change="loadUsers"
-          />
-        </el-tab-pane>
-
-        <!-- 订单发货管理 -->
-        <el-tab-pane label="订单发货" name="orders">
-          <div class="filter-row">
-            <el-select v-model="orderQuery.status" placeholder="全部状态" clearable style="width:160px" @change="orderQuery.page=1; loadOrders()">
-              <el-option v-for="(s, key) in ORDER_STATUS_LABEL" :key="key" :label="s.label" :value="key" />
-            </el-select>
-          </div>
-          <el-table :data="orderList.list" border stripe>
-            <el-table-column prop="id" label="订单号" width="80" />
-            <el-table-column prop="goods_name" label="商品" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="quantity" label="数量" width="70" align="center" />
-            <el-table-column prop="points_cost" label="消耗积分" width="100" align="center" />
-            <el-table-column label="状态" width="110">
-              <template #default="{ row }">
-                <el-tag :type="ORDER_STATUS_LABEL[row.status]?.type" size="small" effect="dark">
-                  {{ ORDER_STATUS_LABEL[row.status]?.label }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="created_at" label="兑换时间" width="170">
-              <template #default="{ row }">{{ row.created_at?.slice(0, 16).replace('T', ' ') }}</template>
-            </el-table-column>
-            <el-table-column label="发货操作" width="240" fixed="right">
-              <template #default="{ row }">
-                <el-button v-if="row.status === 'pending'" type="primary" size="small" @click="onUpdateOrderStatus(row, 'shipping')">标记发货</el-button>
-                <el-button v-if="row.status === 'shipping'" type="success" size="small" @click="onUpdateOrderStatus(row, 'delivered')">确认送达</el-button>
-                <el-button v-if="row.status === 'pending' || row.status === 'shipping'" type="danger" size="small" plain @click="onUpdateOrderStatus(row, 'cancelled')">取消订单</el-button>
-                <span v-else class="muted">—</span>
-              </template>
-            </el-table-column>
-          </el-table>
-          <el-pagination
-            class="pager"
-            v-model:current-page="orderQuery.page"
-            :page-size="orderQuery.page_size"
-            :total="orderList.total"
-            layout="prev, pager, next, total"
-            @current-change="loadOrders"
           />
         </el-tab-pane>
       </el-tabs>

@@ -16,6 +16,3 @@ export const redeemGoods = (id, quantity = 1) =>
 
 // 我的兑换记录
 export const myRedeemRecords = (params) => request.get('/mall/orders/mine', { params })
-
-// 用户取消待发货订单（退积分、恢复库存）
-export const cancelOrder = (id) => request.patch(`/mall/orders/${id}/cancel`)

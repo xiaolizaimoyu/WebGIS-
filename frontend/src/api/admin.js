@@ -18,10 +18,3 @@ export const deleteUser = (id) => request.delete(`/admin/users/${id}`)
 
 // 删除任意评论
 export const deleteComment = (id) => request.delete(`/admin/comments/${id}`)
-
-// 订单发货管理列表（分页）：{ total, page, page_size, list: [...] }
-export const listOrders = (params) => request.get('/admin/orders', { params })
-
-// 更新订单发货状态：status = shipping | delivered | cancelled
-export const updateOrderStatus = (id, status) =>
-  request.patch(`/admin/orders/${id}/status`, { status })
