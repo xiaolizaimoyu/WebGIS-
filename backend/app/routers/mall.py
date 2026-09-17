@@ -116,6 +116,58 @@ def my_orders(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100),
                           "created_at": o.created_at.isoformat()} for o in items]})
 
 
+# 订单状态流转：pending 待发货 -> shipping 配送中 -> delivered 已送达；任意非终态可 -> cancelled
+ORDER_FLOW = {
+    "pending": {"shipping", "delivered", "cancelled"},
+    "shipping": {"delivered", "cancelled"},
+    "delivered": set(),
+    "cancelled": set(),
+}
+
+
+@router.patch("/orders/{order_id}/cancel", summary="用户取消待发货订单")
+def cancel_my_order(
+    order_id: int,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """用户取消自己的待发货订单：退积分、恢复库存、状态改 cancelled。
+
+    仅 pending 可取消；shipping/delivered 已发出不可取消。
+    """
+    order = session.get(Order, order_id)
+    if order is None:
+        raise BizError(2001, "订单不存在")
+    if order.user_id != user.id:
+        raise BizError(2003, "无权操作他人订单")
+    if order.status != "pending":
+        raise BizError(400, "当前状态不可取消（仅待发货可取消）")
+
+    qty = getattr(order, "quantity", 1)
+    # 退还积分
+    user.points = getattr(user, "points", 0) + order.points_cost
+    session.add(user)
+    # 恢复库存
+    if order.goods_id:
+        goods = session.get(MallGoods, order.goods_id)
+        if goods:
+            goods.stock = getattr(goods, "stock", 0) + qty
+            session.add(goods)
+    # 状态变更
+    order.status = "cancelled"
+    session.add(order)
+    # 积分流水（正向，记录退款）
+    log = PointsLog(user_id=user.id, change=order.points_cost,
+                    balance_before=user.points - order.points_cost,
+                    balance_after=user.points,
+                    reason="exchange_cancel")
+    session.add(log)
+    session.commit()
+    return ok({"id": order_id, "status": "cancelled",
+               "refunded_points": order.points_cost,
+               "current_points": user.points}, "订单已取消，积分已退回")
+
+
 def _goods_dict(g: MallGoods) -> dict:
     return {
         "id": g.id,

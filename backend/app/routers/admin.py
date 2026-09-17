@@ -1,4 +1,4 @@
-﻿"""管理员路由（归属：后端 D）
+"""管理员路由（归属：后端 D）
 
 前缀 /api/admin，所有接口都需 Depends(get_current_admin)。
 功能：概览统计、帖子审核（列出/删除任意帖）、用户管理、评论删除。
@@ -14,7 +14,7 @@ from sqlmodel import Session, select
 from app.core.admin import get_current_admin
 from app.core.response import BizError, ok
 from app.db import get_session
-from app.models import Comment, Content, Favorite, Like, LocationPoint, User
+from app.models import Comment, Content, Order, UserFavorite, Like, LocationPoint, User
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
 
@@ -208,6 +208,85 @@ def admin_delete_comment(
     session.delete(comment)
     session.commit()
     return ok({"id": comment_id, "deleted": True}, "管理员已删除该评论")
+
+
+# ==================== 订单发货管理（积分商城） ====================
+
+# 订单状态流转规则：与 mall.py ORDER_FLOW 保持一致
+_ADMIN_ORDER_FLOW = {
+    "pending": {"shipping", "delivered", "cancelled"},
+    "shipping": {"delivered", "cancelled"},
+    "delivered": set(),
+    "cancelled": set(),
+}
+
+
+class OrderStatusIn(BaseModel):
+    status: str  # shipping | delivered | cancelled
+
+
+@router.get("/orders", summary="订单发货管理列表（分页）")
+def admin_list_orders(
+    page: int = 1,
+    page_size: int = 20,
+    status: str = "",
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    """管理员查看所有兑换订单，可按状态筛选，用于发货管理。"""
+    page = max(page, 1)
+    page_size = max(min(page_size, 100), 1)
+    stmt = select(Order)
+    if status:
+        stmt = stmt.where(Order.status == status)
+    total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
+    orders = session.exec(
+        stmt.order_by(Order.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    return ok({
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "list": [
+            {
+                "id": o.id,
+                "user_id": o.user_id,
+                "goods_id": o.goods_id,
+                "goods_name": o.goods_name,
+                "points_cost": o.points_cost,
+                "quantity": getattr(o, "quantity", 1),
+                "status": o.status,
+                "created_at": o.created_at,
+            }
+            for o in orders
+        ],
+    })
+
+
+@router.patch("/orders/{order_id}/status", summary="更新订单发货状态")
+def admin_update_order_status(
+    order_id: int,
+    data: OrderStatusIn,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    """管理员更新订单发货状态：pending -> shipping -> delivered，或置为 cancelled。
+
+    合法流转见 _ADMIN_ORDER_FLOW。非法流转返回 400。
+    """
+    order = session.get(Order, order_id)
+    if order is None:
+        raise BizError(2001, "订单不存在")
+    if data.status not in _ADMIN_ORDER_FLOW:
+        raise BizError(400, f"未知状态：{data.status}")
+    if data.status not in _ADMIN_ORDER_FLOW.get(order.status, set()):
+        raise BizError(400, f"状态非法流转：{order.status} -> {data.status}")
+    order.status = data.status
+    session.add(order)
+    session.commit()
+    return ok({"id": order_id, "status": data.status}, "订单状态已更新")
 
 
 # ==================== 地点坐标管理（发布选点/地图点位校准） ====================
