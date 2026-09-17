@@ -9,6 +9,8 @@ import { getMockCarpoolDetail } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 import { useDialogStore } from '@/stores/dialog'
 import MapComponent from '@/components/MapComponent.vue'
+import request from '@/api/request'
+import { loadAMapPlugins } from '@/components/map/amap-loader'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,8 +36,59 @@ const locationCoords = {
   '济南火车站': [117.0000, 36.6510],
   '淄博北站': [118.0430, 36.8490]
 }
-function coordOf(name, fallback) {
-  return locationCoords[name] || fallback
+// 地点库（后端 /api/locations 管理员手动校准的真实坐标，校园内优先使用）
+const placeLib = ref([])
+// 高德 POI 名称 → 校园地点库别名映射（拼车地点常用叫法与库中名称对齐）
+const placeAlias = {
+  '学校北门': '北门',
+  '学校南门': '南门',
+  '学校东门': '东门',
+  '学校西门': '西门',
+  '第一食堂': '一餐',
+  '第二食堂': '二餐',
+  '图书馆': '逸夫图书馆'
+}
+// 解析地点坐标：① 校园地点库真实坐标 → ② 高德 POI 搜索 → ③ 前端坐标库 → ④ 默认回退
+async function resolveCoord(name, fallback) {
+  if (!name) return fallback
+  const lib = placeLib.value
+  // ① 校园地点库：精确匹配，再尝试别名匹配（如"学校北门"→"北门"）
+  if (lib.length) {
+    const exact = lib.find((p) => p.name === name)
+    if (exact) return [Number(exact.lng), Number(exact.lat)]
+    const alias = placeAlias[name]
+    if (alias) {
+      const hit = lib.find((p) => p.name === alias)
+      if (hit) return [Number(hit.lng), Number(hit.lat)]
+    }
+    const fuzzy = lib.find((p) => name.includes(p.name) || p.name.includes(name))
+    if (fuzzy) return [Number(fuzzy.lng), Number(fuzzy.lat)]
+  }
+  // ② 高德 POI 搜索（校外地点，如火车站/景区）
+  try {
+    const AMap = await loadAMapPlugins(['AMap.PlaceSearch'])
+    const pos = await new Promise((resolve) => {
+      const ps = new AMap.PlaceSearch({ city: '淄博', pageSize: 1, pageIndex: 1 })
+      ps.search(name, (status, result) => {
+        if (status === 'complete' && result?.poiList?.pois?.length) {
+          const p = result.poiList.pois[0]
+          resolve([p.location.getLng(), p.location.getLat()])
+        } else {
+          resolve(null)
+        }
+      })
+    })
+    if (pos) return pos
+  } catch {
+    /* 高德解析失败则继续回退 */
+  }
+  // ③ 前端坐标库回退
+  if (locationCoords[name]) return locationCoords[name]
+  // ④ 默认回退
+  return fallback
+}
+async function coordOf(name, fallback) {
+  return resolveCoord(name, fallback)
 }
 
 // 申请弹窗
@@ -91,11 +144,17 @@ async function loadDetail() {
   } catch {
     carpool.value = getMockCarpoolDetail(carpoolId)
   }
-  // 设置行程路线地图：出发地/目的地标记，自动绘制橙色虚线并缩放视野
-  nextTick(() => {
+  // 加载校园地点库（管理员校准的真实坐标）
+  try {
+    placeLib.value = (await request.get('/locations')) || []
+  } catch {
+    /* 地点库加载失败则用前端坐标回退 */
+  }
+  // 设置行程路线地图：出发地/目的地标记，自动绘制真实驾车路线并缩放视野
+  nextTick(async () => {
     if (!carpool.value) return
-    const from = coordOf(carpool.value.from, [117.9975, 36.8090])
-    const to = coordOf(carpool.value.to, [118.0430, 36.8490])
+    const from = await coordOf(carpool.value.from, [117.9975, 36.8090])
+    const to = await coordOf(carpool.value.to, [118.0430, 36.8490])
     mapMarkers.value = [
       { id: 'start', lng: from[0], lat: from[1], title: `出发：${carpool.value.from}`, color: '#67c23a' },
       { id: 'end', lng: to[0], lat: to[1], title: `到达：${carpool.value.to}`, color: '#f56c6c' }
