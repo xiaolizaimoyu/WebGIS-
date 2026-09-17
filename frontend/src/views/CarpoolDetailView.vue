@@ -62,6 +62,15 @@ const chatMessages = ref([
   { id: 2, sender: 'me', text: '是的，我周六早上在南门集合', time: '10:32' },
   { id: 3, sender: 'organizer', text: '好的，费用每人 80 元，出发前一天再联系你', time: '10:35' }
 ])
+const chatInput = ref('')
+function sendChat() {
+  const text = chatInput.value.trim()
+  if (!text) return
+  const now = new Date()
+  const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  chatMessages.value.push({ id: Date.now(), sender: 'me', text, time: hm })
+  chatInput.value = ''
+}
 
 async function loadDetail() {
   try {
@@ -348,6 +357,14 @@ onMounted(loadDetail)
             <div class="chat-bubble">{{ m.text }}</div>
             <div class="chat-time">{{ m.time }}</div>
           </div>
+        </div>
+        <div class="chat-input-row">
+          <el-input
+            v-model="chatInput"
+            placeholder="输入消息，回车发送（演示）"
+            @keyup.enter="sendChat"
+          />
+          <el-button type="primary" @click="sendChat">发送</el-button>
         </div>
       </div>
 
@@ -694,6 +711,12 @@ onMounted(loadDetail)
   font-size: 11px;
   color: #909399;
   margin-top: 3px;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .actions {
