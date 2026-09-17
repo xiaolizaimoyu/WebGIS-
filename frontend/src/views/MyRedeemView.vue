@@ -1,7 +1,9 @@
 <script setup>
-// 我的兑换记录页（归属：前端 C）
+// 我的兑换记录页（归属：后端 D 改造）
+// 改为表格形式展示发货状态 + 状态进度 + 取消待发货订单
 import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import * as mallApi from '@/api/mall'
 import { formatTime } from '@/api/const'
 import { getMockRedeemRecords, getMockGoods } from '@/utils/mockData'
@@ -12,16 +14,22 @@ const store = useUserStore()
 
 const list = ref([])
 const loading = ref(false)
+const cancelling = ref(false)
 const activeStatus = ref('all')
 
 const userPoints = computed(() => store.signStatus?.totalPoints || 0)
 
+// 状态：pending 待发货 -> shipping 配送中 -> delivered 已送达；cancelled 已取消
 const statusMap = {
   pending: { label: '待发货', type: 'warning', icon: '⏳' },
-  processed: { label: '已完成', type: 'success', icon: '✅' },
   shipping: { label: '配送中', type: 'primary', icon: '🚚' },
   delivered: { label: '已送达', type: 'success', icon: '📦' },
   cancelled: { label: '已取消', type: 'info', icon: '❌' }
+}
+
+// 表格进度列：按状态高亮到第几步
+const stepIndex = (status) => {
+  return { pending: 0, shipping: 1, delivered: 2, cancelled: -1 }[status] ?? 0
 }
 
 const filteredList = computed(() => {
@@ -42,15 +50,12 @@ async function load() {
 }
 
 function getGoodsImage(r) {
-  // 后端订单接口已返回 goods_image（本地 /uploads 图）
   if (r.goods_image) return r.goods_image
-  // mock 兜底：按 goods_id 从 mock 商品中找图
   const goods = getMockGoods()
   const g = goods.find((x) => x.id === r.goods_id)
   return g?.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80'
 }
 
-// 外链图片加载失败时回退到本地 emoji 占位，避免裂图
 function onImgError(e) {
   e.target.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(
     "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>" +
@@ -58,6 +63,27 @@ function onImgError(e) {
     "<text x='50' y='62' font-size='40' text-anchor='middle'>🎁</text></svg>"
   )
   e.target.onerror = null
+}
+
+async function onCancel(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确定取消订单「${row.goods_name}」？取消后积分将原路退回。`,
+      '取消订单确认',
+      { type: 'warning', confirmButtonText: '取消订单', cancelButtonText: '再想想' }
+    )
+  } catch { return }
+  cancelling.value = true
+  try {
+    await mallApi.cancelOrder(row.id)
+    ElMessage.success('订单已取消，积分已退回')
+    load()
+    if (store.isLoggedIn) store.fetchSignStatus()
+  } catch {
+    // request.js 统一提示
+  } finally {
+    cancelling.value = false
+  }
 }
 
 function goToMall() {
@@ -105,40 +131,74 @@ onMounted(() => {
       </div>
     </el-card>
 
-    <!-- 兑换记录列表 -->
-    <el-card shadow="never" class="list-card">
-      <div v-loading="loading" class="records-list">
-        <el-empty v-if="!filteredList.length && !loading" description="暂无兑换记录" :image-size="100">
-          <template #footer>
-            <el-button type="primary" @click="goToMall">去商城看看</el-button>
+    <!-- 兑换记录表格（列表形式展示发货状态） -->
+    <el-card shadow="never" class="table-card">
+      <el-table
+        v-loading="loading"
+        :data="filteredList"
+        stripe
+        style="width: 100%"
+        empty-text="暂无兑换记录"
+      >
+        <el-table-column label="商品" min-width="220">
+          <template #default="{ row }">
+            <div class="goods-cell">
+              <img
+                :src="getGoodsImage(row)"
+                :alt="row.goods_name"
+                class="goods-thumb"
+                @error="onImgError"
+              />
+              <span class="goods-name">{{ row.goods_name }}</span>
+            </div>
           </template>
-        </el-empty>
+        </el-table-column>
+        <el-table-column label="数量" width="80" align="center">
+          <template #default="{ row }">x{{ row.quantity ?? 1 }}</template>
+        </el-table-column>
+        <el-table-column label="消耗积分" width="110" align="center">
+          <template #default="{ row }">
+            <span class="points-cost">{{ (row.points_cost ?? row.points ?? 0) * (row.quantity ?? 1) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="兑换时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.redeem_time ?? row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column label="发货状态" min-width="220">
+          <template #default="{ row }">
+            <!-- 已取消：仅展示标签 -->
+            <el-tag v-if="row.status === 'cancelled'" type="info" size="small" effect="dark">
+              ❌ 已取消
+            </el-tag>
+            <!-- 进行中：三步进度条 -->
+            <el-steps v-else :active="stepIndex(row.status)" finish-status="success" process-status="finish" class="status-steps">
+              <el-step title="待发货" />
+              <el-step title="配送中" />
+              <el-step title="已送达" />
+            </el-steps>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.status === 'pending'"
+              type="danger"
+              size="small"
+              plain
+              :loading="cancelling"
+              @click="onCancel(row)"
+            >
+              取消订单
+            </el-button>
+            <span v-else-if="row.status === 'shipping'" class="shipping-tip">🚚 运输中</span>
+            <span v-else-if="row.status === 'delivered'" class="delivered-tip">✅ 已完成</span>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
+      </el-table>
 
-        <div v-for="r in filteredList" :key="r.id" class="record-item">
-          <div class="record-icon">
-            <img :src="getGoodsImage(r)" :alt="r.goods_name" class="record-cover" @error="onImgError" />
-          </div>
-          <div class="record-info">
-            <div class="record-head">
-              <h4 class="record-name">{{ r.goods_name }}</h4>
-              <el-tag :type="statusMap[r.status]?.type" size="small" effect="dark">
-                {{ statusMap[r.status]?.icon }} {{ statusMap[r.status]?.label }}
-              </el-tag>
-            </div>
-            <div class="record-meta">
-              <span>数量：x{{ r.quantity ?? 1 }}</span>
-              <span>消耗：<strong class="points-cost">{{ (r.points_cost ?? r.points ?? 0) * (r.quantity ?? 1) }}</strong> 积分</span>
-              <span>兑换时间：{{ formatTime(r.redeem_time ?? r.created_at) }}</span>
-            </div>
-            <div v-if="r.status === 'shipping'" class="record-tracking">
-              🚚 商品已发出，预计2-3天送达，请保持电话畅通
-            </div>
-            <div v-if="r.status === 'delivered'" class="record-actions">
-              <el-button text type="primary" size="small">查看详情</el-button>
-              <el-button text type="success" size="small">评价商品</el-button>
-            </div>
-          </div>
-        </div>
+      <div v-if="!filteredList.length && !loading" class="empty-action">
+        <el-button type="primary" @click="goToMall">去商城看看</el-button>
       </div>
     </el-card>
   </div>
@@ -146,7 +206,7 @@ onMounted(() => {
 
 <style scoped>
 .records-page {
-  max-width: 860px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 20px;
 }
@@ -196,6 +256,7 @@ onMounted(() => {
 .filter-tabs {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .filter-tab {
@@ -225,82 +286,68 @@ onMounted(() => {
   opacity: 0.8;
 }
 
-.list-card {
+.table-card {
   border-radius: 12px;
 }
 
-.records-list {
-  min-height: 300px;
-}
-
-.record-item {
-  display: flex;
-  gap: 16px;
-  padding: 16px 0;
-  border-bottom: 1px solid #f0f2f5;
-}
-
-.record-item:last-child {
-  border-bottom: none;
-}
-
-.record-icon {
-  width: 64px;
-  height: 64px;
-  background: linear-gradient(135deg, #f5f7fa, #e8ecf1);
-  border-radius: 10px;
+.goods-cell {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 32px;
+  gap: 10px;
+}
+
+.goods-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #f5f7fa;
   flex-shrink: 0;
 }
 
-.record-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.record-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.record-name {
-  font-size: 15px;
+.goods-name {
+  font-size: 14px;
   font-weight: 600;
   color: #303133;
-  margin: 0;
-}
-
-.record-meta {
-  display: flex;
-  gap: 16px;
-  font-size: 12px;
-  color: #909399;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
 }
 
 .points-cost {
   color: #f56c6c;
-  font-size: 14px;
+  font-weight: 600;
 }
 
-.record-tracking {
-  font-size: 12px;
-  color: #1d6df0;
-  background: #ecf5ff;
-  padding: 6px 10px;
-  border-radius: 6px;
-  display: inline-block;
-}
-
-.record-actions {
-  display: flex;
-  gap: 12px;
+/* 三步进度条压缩高度，适配表格行 */
+.status-steps {
   margin-top: 4px;
+}
+.status-steps :deep(.el-step__title) {
+  font-size: 12px;
+}
+.status-steps :deep(.el-step__icon) {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+.status-steps :deep(.el-step__line) {
+  top: 11px;
+}
+
+.shipping-tip {
+  color: #1d6df0;
+  font-size: 13px;
+}
+
+.delivered-tip {
+  color: #67c23a;
+  font-size: 13px;
+}
+
+.muted {
+  color: #c0c4cc;
+}
+
+.empty-action {
+  text-align: center;
+  padding: 30px 0;
 }
 </style>
