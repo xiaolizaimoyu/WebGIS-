@@ -3,7 +3,7 @@
 // 对外契约（与旧版 OpenLayers 组件保持一致，调用方无需改动）：
 //   props: center [lng, lat], zoom, markers [{id, lng, lat, title}], height
 //   emit:  ready(amap), click({lng,lat}), marker-click({id,title})
-//   expose: addMarker / removeMarker / setCenter / fitToMarkers / getMap / highlightMarker / updateSize
+//   expose: addMarker / removeMarker / setCenter / fitToMarkers / getMap / highlightMarker / updateSize / drawRoute / clearRoute
 // 坐标系：全链路 GCJ-02（高德火星坐标），传入坐标须为 GCJ-02
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { loadAMap } from './map/amap-loader'
@@ -21,6 +21,7 @@ const mapEl = ref(null)
 let map = null
 let AMap = null
 const markerMap = new Map() // id -> AMap.Marker
+let routeOverlay = null // 路线覆盖物（橙色虚线）
 
 // 点位 SVG（默认蓝色）
 function pinSvg(color = '#409eff', highlight = false) {
@@ -125,6 +126,32 @@ defineExpose({
   },
   updateSize: () => {
     if (map) nextTick(() => map.resize())
+  },
+  // 绘制出发地→目的地路线（橙色虚线），自动缩放视野
+  drawRoute: (start, end) => {
+    if (!map || !AMap || !start || !end) return
+    if (routeOverlay) {
+      map.remove(routeOverlay)
+      routeOverlay = null
+    }
+    routeOverlay = new AMap.Polyline({
+      path: [start, end],
+      strokeColor: '#ff7d00',
+      strokeWeight: 6,
+      strokeOpacity: 0.9,
+      strokeStyle: 'dashed',
+      strokeDasharray: [10, 10],
+      lineJoin: 'round',
+      lineCap: 'round'
+    })
+    map.add(routeOverlay)
+    map.setFitView([routeOverlay], false, [60, 60, 60, 60])
+  },
+  clearRoute: () => {
+    if (routeOverlay && map) {
+      map.remove(routeOverlay)
+      routeOverlay = null
+    }
   }
 })
 
