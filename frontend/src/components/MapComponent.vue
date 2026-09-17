@@ -3,7 +3,7 @@
 // 对外契约：
 //   props: center [lng, lat], zoom, markers [{id, lng, lat, title}]
 //   emit:  ready(olMap), click(coordinate), marker-click(marker)
-//   expose: addMarker / removeMarker / setCenter / fitToMarkers / getMap
+//   expose: addMarker / removeMarker / setCenter / fitToMarkers / getMap / drawRoute
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import Map from 'ol/Map'
 import View from 'ol/View'
@@ -13,7 +13,8 @@ import VectorLayer from 'ol/layer/Vector'
 import VectorSource from 'ol/source/Vector'
 import Feature from 'ol/Feature'
 import Point from 'ol/geom/Point'
-import { Style, Icon, Fill, Stroke, Text } from 'ol/style'
+import LineString from 'ol/geom/LineString'
+import { Style, Icon, Fill, Stroke, Text, Circle as CircleStyle } from 'ol/style'
 import { fromLonLat, toLonLat } from 'ol/proj'
 import 'ol/ol.css'
 
@@ -30,15 +31,17 @@ const mapEl = ref(null)
 let olMap = null
 let vectorLayer = null
 let vectorSource = null
+let routeLayer = null
+let routeSource = null
 
 // 创建标记点样式
-function createMarkerStyle(title) {
+function createMarkerStyle(title, color) {
   return new Style({
     image: new Icon({
       anchor: [0.5, 1],
       src: 'data:image/svg+xml;utf8,' + encodeURIComponent(`
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="40" viewBox="0 0 32 40">
-          <path d="M16 0C7.16 0 0 7.16 0 16c0 12 16 24 16 24s16-12 16-24C32 7.16 24.84 0 16 0z" fill="#409eff" stroke="#fff" stroke-width="2"/>
+          <path d="M16 0C7.16 0 0 7.16 0 16c0 12 16 24 16 24s16-12 16-24C32 7.16 24.84 0 16 0z" fill="${color || '#409eff'}" stroke="#fff" stroke-width="2"/>
           <circle cx="16" cy="16" r="6" fill="#fff"/>
         </svg>
       `),
@@ -64,7 +67,7 @@ function renderMarkers() {
       markerId: m.id,
       markerTitle: m.title
     })
-    feature.setStyle(createMarkerStyle(m.title))
+    feature.setStyle(createMarkerStyle(m.title, m.color))
     vectorSource.addFeature(feature)
   })
 }
@@ -76,10 +79,12 @@ function initMap() {
   vectorSource = new VectorSource()
   vectorLayer = new VectorLayer({ source: vectorSource })
 
+  routeSource = new VectorSource()
+  routeLayer = new VectorLayer({ source: routeSource })
+
   olMap = new Map({
     target: mapEl.value,
     layers: [
-      // 高德地图瓦片（国内可用，无需 API Key）
       new TileLayer({
         source: new XYZ({
           urls: [
@@ -91,22 +96,21 @@ function initMap() {
           attributions: '© 高德地图'
         })
       }),
+      routeLayer,
       vectorLayer
     ],
     view: new View({
       center: fromLonLat(props.center),
       zoom: props.zoom
     }),
-    controls: [] // 隐藏默认控件，保持简洁
+    controls: []
   })
 
-  // 地图点击事件
   olMap.on('click', (evt) => {
     const coord = toLonLat(evt.coordinate)
     emit('click', { lng: coord[0], lat: coord[1], pixel: evt.pixel })
   })
 
-  // 标记点点击事件
   olMap.on('singleclick', (evt) => {
     olMap.forEachFeatureAtPixel(evt.pixel, (feature) => {
       const id = feature.get('markerId')
@@ -159,7 +163,7 @@ defineExpose({
       markerId: m.id,
       markerTitle: m.title
     })
-    feature.setStyle(createMarkerStyle(m.title))
+    feature.setStyle(createMarkerStyle(m.title, m.color))
     vectorSource.addFeature(feature)
   },
   removeMarker: (id) => {
@@ -170,7 +174,26 @@ defineExpose({
   },
   fitToMarkers: () => {
     if (!olMap || !vectorSource || vectorSource.getFeatures().length === 0) return
-    olMap.getView().fit(vectorSource.getExtent(), { padding: [40, 40, 40, 40], maxZoom: 15 })
+    olMap.getView().fit(vectorSource.getExtent(), { padding: [60, 60, 60, 60], maxZoom: 14 })
+  },
+  // 绘制两点间路线
+  drawRoute: (start, end) => {
+    if (!routeSource || !olMap) return
+    routeSource.clear()
+    const coords = [fromLonLat(start), fromLonLat(end)]
+    const lineFeature = new Feature({
+      geometry: new LineString(coords)
+    })
+    lineFeature.setStyle(new Style({
+      stroke: new Stroke({
+        color: '#e6a23c',
+        width: 4,
+        lineDash: [10, 8]
+      })
+    }))
+    routeSource.addFeature(lineFeature)
+    // 自适应视野
+    olMap.getView().fit(routeSource.getExtent(), { padding: [80, 80, 80, 80], maxZoom: 13 })
   },
   updateSize: () => {
     if (olMap) {
@@ -203,7 +226,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-/* 确保 OpenLayers 内部元素正确撑满 */
 .ol-map-container :deep(.ol-viewport) {
   border-radius: 8px;
 }
