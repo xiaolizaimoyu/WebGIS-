@@ -14,7 +14,7 @@ from sqlmodel import Session, select
 from app.core.admin import get_current_admin
 from app.core.response import BizError, ok
 from app.db import get_session
-from app.models import Comment, Content, Order, UserFavorite, Like, LocationPoint, User
+from app.models import Comment, Content, Order, Favorite, Like, LocationPoint, User
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
 
