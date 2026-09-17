@@ -37,7 +37,7 @@ function createMarker(m) {
   if (!map || !AMap) return
   const marker = new AMap.Marker({
     position: [Number(m.lng), Number(m.lat)],
-    content: pinSvg('#409eff'),
+    content: pinSvg(m.color || '#409eff'),
     offset: new AMap.Pixel(-16, -40),
     title: m.title || ''
   })

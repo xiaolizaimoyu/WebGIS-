@@ -96,8 +96,8 @@ async function loadDetail() {
     const from = coordOf(carpool.value.from, [117.9975, 36.8090])
     const to = coordOf(carpool.value.to, [118.0430, 36.8490])
     mapMarkers.value = [
-      { id: 'start', lng: from[0], lat: from[1], title: `出发：${carpool.value.from}` },
-      { id: 'end', lng: to[0], lat: to[1], title: `到达：${carpool.value.to}` }
+      { id: 'start', lng: from[0], lat: from[1], title: `出发：${carpool.value.from}`, color: '#67c23a' },
+      { id: 'end', lng: to[0], lat: to[1], title: `到达：${carpool.value.to}`, color: '#f56c6c' }
     ]
     nextTick(() => {
       mapRef.value?.drawRoute?.(from, to)
