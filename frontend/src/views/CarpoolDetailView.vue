@@ -311,6 +311,23 @@ onMounted(loadDetail)
         <p>{{ carpool.note }}</p>
       </div>
 
+      <!-- 行程路线地图 -->
+      <div class="map-box">
+        <div class="map-box-title">🗺️ 行程路线</div>
+        <MapComponent
+          ref="mapRef"
+          :markers="mapMarkers"
+          :center="[117.9975, 36.8090]"
+          :zoom="13"
+          height="320px"
+        />
+        <div class="map-legend">
+          <span class="legend-item"><i class="legend-dot start-dot"></i>出发地（绿）</span>
+          <span class="legend-item"><i class="legend-dot end-dot"></i>目的地（红）</span>
+          <span class="legend-item"><i class="legend-line"></i>行程路线（橙色虚线）</span>
+        </div>
+      </div>
+
       <div class="actions">
         <!-- 申请人视角：待确认时显示取消；否则显示申请按钮 -->
         <template v-if="!isAuthor">
