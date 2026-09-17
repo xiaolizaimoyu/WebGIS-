@@ -565,6 +565,48 @@ onMounted(loadDetail)
   margin: 0;
 }
 
+.map-box {
+  margin-bottom: 20px;
+}
+
+.map-box-title {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 10px;
+}
+
+.map-legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #606266;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.start-dot { background: #67c23a; }
+.end-dot { background: #f56c6c; }
+
+.legend-line {
+  width: 24px;
+  height: 0;
+  border-top: 3px dashed #ff7d00;
+  display: inline-block;
+}
+
 .actions {
   display: flex;
   gap: 12px;
