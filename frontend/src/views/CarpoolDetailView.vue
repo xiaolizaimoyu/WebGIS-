@@ -63,6 +63,7 @@ const chatMessages = ref([
   { id: 3, sender: 'organizer', text: '好的，费用每人 80 元，出发前一天再联系你', time: '10:35' }
 ])
 const chatInput = ref('')
+const chatEndRef = ref(null)
 function sendChat() {
   const text = chatInput.value.trim()
   if (!text) return
@@ -70,6 +71,17 @@ function sendChat() {
   const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   chatMessages.value.push({ id: Date.now(), sender: 'me', text, time: hm })
   chatInput.value = ''
+  nextTick(() => chatEndRef.value?.scrollIntoView({ behavior: 'smooth' }))
+  // 模拟对方自动回复
+  setTimeout(() => {
+    chatMessages.value.push({
+      id: Date.now() + 1,
+      sender: 'organizer',
+      text: '收到，稍后回复你～',
+      time: hm
+    })
+    nextTick(() => chatEndRef.value?.scrollIntoView({ behavior: 'smooth' }))
+  }, 1200)
 }
 
 async function loadDetail() {
@@ -357,6 +369,7 @@ onMounted(loadDetail)
             <div class="chat-bubble">{{ m.text }}</div>
             <div class="chat-time">{{ m.time }}</div>
           </div>
+          <div ref="chatEndRef"></div>
         </div>
         <div class="chat-input-row">
           <el-input
