@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 // 拼车详情页（前端 C）——申请提交后待车主确认；车主可同意/拒绝；申请人可取消
 import { onMounted, ref, reactive, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -7,6 +7,7 @@ import * as carpoolApi from '@/api/carpool'
 import { getMockCarpoolDetail } from '@/utils/mockData'
 import { useUserStore } from '@/stores/user'
 import { useDialogStore } from '@/stores/dialog'
+import MapComponent from '@/components/MapComponent.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,6 +16,26 @@ const dialog = useDialogStore()
 
 const carpoolId = Number(route.params.id)
 const carpool = ref(null)
+
+// 行程路线地图
+const mapRef = ref(null)
+const mapMarkers = ref([])
+// 淄博校区周边及目的地坐标（GCJ-02，用于路线地图展示；未命中的地点回退到校园中心附近）
+const locationCoords = {
+  '学校南门': [117.9985, 36.8060],
+  '学校北门': [117.9975, 36.8145],
+  '学校东门': [118.0050, 36.8100],
+  '学校西门': [117.9890, 36.8100],
+  '第一食堂': [118.0030, 36.8090],
+  '第二食堂': [118.0080, 36.8120],
+  '图书馆': [118.0045, 36.8085],
+  '泰山风景区': [117.1060, 36.2530],
+  '济南火车站': [117.0000, 36.6510],
+  '淄博北站': [118.0430, 36.8490]
+}
+function coordOf(name, fallback) {
+  return locationCoords[name] || fallback
+}
 
 // 申请弹窗
 const applyVisible = ref(false)
