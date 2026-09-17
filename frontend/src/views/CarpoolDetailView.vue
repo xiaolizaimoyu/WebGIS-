@@ -1,7 +1,7 @@
 ﻿<script setup>
 // 拼车详情页（前端 C）——申请提交后待车主确认；车主可同意/拒绝；申请人可取消
 // 功能：① 申请加入拼车（待车主确认，可取消）② 车主同意/拒绝申请 ③ 行程路线地图（出发/到达标记+橙色虚线）④ 与发起人聊天（演示）
-import { onMounted, ref, reactive, computed, nextTick } from 'vue'
+import { onMounted, onBeforeUnmount, ref, reactive, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as carpoolApi from '@/api/carpool'
@@ -110,32 +110,99 @@ const appsLoading = ref(false)
 const myApp = computed(() => carpool.value?.my_application || null)
 const isAuthor = computed(() => !!carpool.value?.is_author)
 
-// 聊天功能（前端演示：模拟对方自动回复，未接入后端）
-const chatMessages = ref([
-  { id: 1, sender: 'organizer', text: '你好，拼车时间和地点都确认了吗？', time: '10:30' },
-  { id: 2, sender: 'me', text: '是的，我周六早上在南门集合', time: '10:32' },
-  { id: 3, sender: 'organizer', text: '好的，费用每人 80 元，出发前一天再联系你', time: '10:35' }
-])
+// 已加入成员（车主视角）
+const joinedMembers = computed(() =>
+  (appList.value || []).filter((a) => a.status === 'approved')
+)
+
+// 退出拼车（已加入成员）
+async function quitCarpool() {
+  try {
+    await ElMessageBox.confirm('确定退出该拼车吗？退出后座位将释放。', '退出拼车', {
+      type: 'warning',
+      confirmButtonText: '退出',
+      cancelButtonText: '再想想'
+    })
+  } catch {
+    return
+  }
+  try {
+    const a = myApp.value
+    if (!a) return
+    await carpoolApi.cancelApplication(carpool.value.id, a.id)
+    ElMessage.success('已退出拼车，座位已释放')
+    loadDetail()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '退出失败')
+  }
+}
+
+// 车主移除已加入成员
+async function handleRemoveMember(a) {
+  try {
+    await ElMessageBox.confirm(`确定将「${a.applicant_name}」移出拼车吗？座位将释放。`, '移除成员', {
+      type: 'warning',
+      confirmButtonText: '移除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return
+  }
+  try {
+    await carpoolApi.removeMember(carpool.value.id, a.id)
+    ElMessage.success('已移除成员')
+    loadApplications()
+    loadDetail()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '移除失败')
+  }
+}
+
+// 聊天功能（真实聊天：对接后端 carpool_messages 表，车主与已加入成员可收发）
+const chatMessages = ref([])
 const chatInput = ref('')
 const chatEndRef = ref(null)
-function sendChat() {
+const chatLoading = ref(false)
+let chatTimer = null
+
+// 是否有聊天权限（车主或已加入成员）
+const canChat = computed(() => {
+  if (!carpool.value) return false
+  if (carpool.value.is_author) return true
+  return myApp.value?.status === 'approved'
+})
+
+async function loadMessages() {
+  if (!canChat.value || !carpool.value) return
+  try {
+    const items = (await carpoolApi.listMessages(carpool.value.id))?.items || []
+    chatMessages.value = items.map((m) => ({
+      id: m.id,
+      sender: m.sender_id === store.userInfo?.id ? 'me' : 'theirs',
+      sender_name: m.sender_name,
+      text: m.content,
+      time: (m.created_at || '').slice(11, 16)
+    }))
+    nextTick(() => chatEndRef.value?.scrollIntoView({ behavior: 'smooth' }))
+  } catch {
+    /* 无权限或失败时静默 */
+  }
+}
+
+async function sendChat() {
   const text = chatInput.value.trim()
   if (!text) return
-  const now = new Date()
-  const hm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  chatMessages.value.push({ id: Date.now(), sender: 'me', text, time: hm })
-  chatInput.value = ''
-  nextTick(() => chatEndRef.value?.scrollIntoView({ behavior: 'smooth' }))
-  // 模拟对方自动回复
-  setTimeout(() => {
-    chatMessages.value.push({
-      id: Date.now() + 1,
-      sender: 'organizer',
-      text: '收到，稍后回复你～',
-      time: hm
-    })
-    nextTick(() => chatEndRef.value?.scrollIntoView({ behavior: 'smooth' }))
-  }, 1200)
+  if (!canChat.value) {
+    ElMessage.warning('仅车主或已加入成员可发送消息')
+    return
+  }
+  try {
+    await carpoolApi.sendMessage(carpool.value.id, text)
+    chatInput.value = ''
+    await loadMessages()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '发送失败')
+  }
 }
 
 async function loadDetail() {
@@ -307,7 +374,15 @@ async function removeCarpool() {
   }
 }
 
-onMounted(loadDetail)
+onMounted(() => {
+  loadDetail()
+  // 聊天轮询（3 秒），退出页面自动清除
+  chatTimer = setInterval(() => loadMessages(), 3000)
+})
+
+onBeforeUnmount(() => {
+  if (chatTimer) clearInterval(chatTimer)
+})
 </script>
 
 <template>
@@ -387,10 +462,14 @@ onMounted(loadDetail)
           <el-button size="small" type="danger" plain @click="cancelMyApplication">取消申请</el-button>
         </template>
         <template v-else-if="myApp.status === 'approved'">
-          <span>✅ 车主已同意您的申请（{{ myApp.people_count }} 人），请按时赴约</span>
+          <span>✅ 您已加入该拼车（{{ myApp.people_count }} 人），可与车主在下方沟通</span>
+          <el-button size="small" type="danger" plain @click="quitCarpool">退出拼车</el-button>
         </template>
         <template v-else-if="myApp.status === 'rejected'">
           <span>❌ 您的申请被车主拒绝了</span>
+        </template>
+        <template v-else-if="myApp.status === 'removed'">
+          <span>⚠️ 您已被车主移出该拼车</span>
         </template>
       </div>
 
@@ -416,36 +495,48 @@ onMounted(loadDetail)
         </div>
       </div>
 
-      <!-- 聊天（前端演示） -->
+      <!-- 聊天（真实消息，车主与已加入成员） -->
       <div class="chat-box">
         <div class="chat-box-title">💬 与发起人沟通</div>
-        <div class="chat-list">
-          <div
-            v-for="m in chatMessages"
-            :key="m.id"
-            class="chat-msg"
-            :class="m.sender === 'me' ? 'mine' : 'theirs'"
-          >
-            <div class="chat-bubble">{{ m.text }}</div>
-            <div class="chat-time">{{ m.time }}</div>
+        <template v-if="canChat">
+          <div v-loading="chatLoading" class="chat-list">
+            <el-empty
+              v-if="!chatMessages.length"
+              description="暂无消息，打个招呼吧～"
+              :image-size="60"
+            />
+            <div
+              v-for="m in chatMessages"
+              :key="m.id"
+              class="chat-msg"
+              :class="m.sender === 'me' ? 'mine' : 'theirs'"
+            >
+              <div class="chat-sender">{{ m.sender_name }}</div>
+              <div class="chat-bubble">{{ m.text }}</div>
+              <div class="chat-time">{{ m.time }}</div>
+            </div>
+            <div ref="chatEndRef"></div>
           </div>
-          <div ref="chatEndRef"></div>
-        </div>
-        <div class="chat-input-row">
-          <el-input
-            v-model="chatInput"
-            placeholder="输入消息，回车发送（演示）"
-            @keyup.enter="sendChat"
-          />
-          <el-button type="primary" @click="sendChat">发送</el-button>
+          <div class="chat-input-row">
+            <el-input
+              v-model="chatInput"
+              placeholder="输入消息，回车发送"
+              maxlength="500"
+              @keyup.enter="sendChat"
+            />
+            <el-button type="primary" @click="sendChat">发送</el-button>
+          </div>
+        </template>
+        <div v-else class="chat-no-perm">
+          🔒 加入拼车后可查看并与车主沟通
         </div>
       </div>
 
       <div class="actions">
-        <!-- 申请人视角：待确认时显示取消；否则显示申请按钮 -->
+        <!-- 申请人视角：待确认时显示取消；已加入时显示已加入+退出；否则显示申请按钮 -->
         <template v-if="!isAuthor">
           <el-button
-            v-if="!myApp || myApp.status !== 'pending'"
+            v-if="!myApp || (myApp.status !== 'pending' && myApp.status !== 'approved')"
             type="primary"
             size="large"
             :disabled="carpool.seats_left <= 0"
@@ -454,12 +545,25 @@ onMounted(loadDetail)
             {{ carpool.seats_left > 0 ? '🙋 申请加入' : '已满员' }}
           </el-button>
           <el-button
-            v-else
+            v-else-if="myApp.status === 'pending'"
             type="warning"
             size="large"
             plain
             @click="cancelMyApplication"
           >⏳ 等待确认，点击取消</el-button>
+          <el-button
+            v-else
+            type="success"
+            size="large"
+            disabled
+          >✅ 已加入拼车</el-button>
+          <el-button
+            v-if="myApp && myApp.status === 'approved'"
+            type="danger"
+            size="large"
+            plain
+            @click="quitCarpool"
+          >退出拼车</el-button>
         </template>
         <template v-else>
           <el-button size="large" @click="toEdit">✏️ 编辑</el-button>
@@ -504,7 +608,7 @@ onMounted(loadDetail)
                 size="small"
                 :type="a.status === 'pending' ? 'warning' : (a.status === 'approved' ? 'success' : (a.status === 'rejected' ? 'danger' : 'info'))"
               >
-                {{ a.status === 'pending' ? '待确认' : (a.status === 'approved' ? '已同意' : (a.status === 'rejected' ? '已拒绝' : '已取消')) }}
+                {{ a.status === 'pending' ? '待确认' : (a.status === 'approved' ? '已加入' : (a.status === 'rejected' ? '已拒绝' : (a.status === 'removed' ? '已移除' : '已退出'))) }}
               </el-tag>
             </div>
             <div class="app-meta">📱 {{ a.phone }} · 👥 {{ a.people_count }} 人 · {{ a.created_at.slice(0, 16) }}</div>
@@ -513,6 +617,9 @@ onMounted(loadDetail)
           <div v-if="a.status === 'pending'" class="app-ops">
             <el-button size="small" type="success" @click="handleApprove(a)">同意</el-button>
             <el-button size="small" type="danger" plain @click="handleReject(a)">拒绝</el-button>
+          </div>
+          <div v-else-if="a.status === 'approved'" class="app-ops">
+            <el-button size="small" type="danger" plain @click="handleRemoveMember(a)">移除成员</el-button>
           </div>
         </div>
       </div>

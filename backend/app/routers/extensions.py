@@ -22,7 +22,7 @@ from app.routers.material_docs import generate_material_file
 from app.routers.post import _get_optional_user
 from app.core.security import get_current_user
 from app.db import get_session
-from app.models import Carpool, CarpoolApplication, User
+from app.models import Carpool, CarpoolApplication, CarpoolMessage, User
 
 router = APIRouter(tags=["扩展模块"])
 
@@ -544,22 +544,122 @@ def reject_application(cid: int, aid: int, user: User = Depends(get_current_user
     return ok({"application_status": "rejected"}, "已拒绝该申请")
 
 
-@router.post("/carpools/{cid}/applications/{aid}/cancel", summary="取消申请（仅申请人本人）")
+@router.post("/carpools/{cid}/applications/{aid}/cancel", summary="取消申请/退出拼车（仅申请人本人）")
 def cancel_application(cid: int, aid: int, user: User = Depends(get_current_user),
                        session: Session = Depends(get_session)):
+    """取消自己的申请；若已被同意（已加入），则退出拼车并归还座位。"""
     a = session.get(CarpoolApplication, aid)
     if not a or a.carpool_id != cid:
         raise BizError(404, "申请不存在")
     if a.applicant_id != user.id:
-        raise BizError(403, "只能取消自己的申请")
+        raise BizError(403, "只能操作自己的申请")
+    c = session.get(Carpool, cid)
     if a.status == "approved":
-        raise BizError(400, "申请已被车主同意，请联系车主处理")
+        # 已加入拼车 → 退出：归还座位，若之前满员则恢复招募
+        if c:
+            c.seats_left += a.people_count
+            if c.status == "full":
+                c.status = "recruiting"
+            session.add(c)
+        a.status = "cancelled"
+        session.add(a)
+        session.commit()
+        return ok({"application_status": "cancelled", "seats_left": c.seats_left if c else None},
+                  "已退出拼车，座位已释放")
     if a.status not in ("pending", "rejected"):
         raise BizError(400, "该申请当前状态不可取消")
     a.status = "cancelled"
     session.add(a)
     session.commit()
     return ok({"application_status": "cancelled"}, "已取消申请")
+
+
+@router.post("/carpools/{cid}/applications/{aid}/remove", summary="移除成员（仅车主，已加入成员）")
+def remove_member(cid: int, aid: int, user: User = Depends(get_current_user),
+                  session: Session = Depends(get_session)):
+    """车主将已加入的成员移出拼车，归还座位。"""
+    c = session.get(Carpool, cid)
+    a = session.get(CarpoolApplication, aid)
+    if not c or not a or a.carpool_id != cid:
+        raise BizError(404, "申请不存在")
+    if c.author_id != user.id:
+        raise BizError(403, "只有车主可以移除成员")
+    if a.status != "approved":
+        raise BizError(400, "仅已加入的成员可被移除")
+    c.seats_left += a.people_count
+    if c.status == "full":
+        c.status = "recruiting"
+    a.status = "removed"
+    session.add(c)
+    session.add(a)
+    session.commit()
+    return ok({"application_status": "removed", "seats_left": c.seats_left},
+              "已移除成员，座位已释放")
+
+
+@router.get("/carpools/{cid}/messages", summary="拼车聊天记录（车主与已加入成员）")
+def list_carpool_messages(cid: int, user: User = Depends(get_current_user),
+                          session: Session = Depends(get_session)):
+    """获取拼车聊天记录：仅车主与已加入成员（approved）可见。"""
+    c = session.get(Carpool, cid)
+    if not c:
+        raise BizError(404, "拼车信息不存在")
+    if c.author_id != user.id:
+        joined = session.exec(
+            select(CarpoolApplication).where(
+                CarpoolApplication.carpool_id == cid,
+                CarpoolApplication.applicant_id == user.id,
+                CarpoolApplication.status == "approved",
+            )
+        ).first()
+        if not joined:
+            raise BizError(403, "仅车主或已加入成员可查看聊天")
+    msgs = session.exec(
+        select(CarpoolMessage).where(CarpoolMessage.carpool_id == cid)
+        .order_by(CarpoolMessage.created_at.asc())
+    ).all()
+    return ok({"items": [
+        {
+            "id": m.id, "sender_id": m.sender_id, "sender_name": m.sender_name,
+            "content": m.content, "created_at": m.created_at.isoformat(),
+        }
+        for m in msgs
+    ]})
+
+
+@router.post("/carpools/{cid}/messages", summary="发送拼车聊天消息")
+def send_carpool_message(cid: int, data: dict, user: User = Depends(get_current_user),
+                         session: Session = Depends(get_session)):
+    """发送消息：仅车主与已加入成员（approved）可发。"""
+    c = session.get(Carpool, cid)
+    if not c:
+        raise BizError(404, "拼车信息不存在")
+    if c.author_id != user.id:
+        joined = session.exec(
+            select(CarpoolApplication).where(
+                CarpoolApplication.carpool_id == cid,
+                CarpoolApplication.applicant_id == user.id,
+                CarpoolApplication.status == "approved",
+            )
+        ).first()
+        if not joined:
+            raise BizError(403, "仅车主或已加入成员可发送消息")
+    content = (data.get("content") or "").strip()
+    if not content:
+        raise BizError(400, "消息内容不能为空")
+    if len(content) > 500:
+        raise BizError(400, "消息内容过长")
+    msg = CarpoolMessage(
+        carpool_id=cid, sender_id=user.id, sender_name=user.nickname or user.username,
+        content=content,
+    )
+    session.add(msg)
+    session.commit()
+    session.refresh(msg)
+    return ok({
+        "id": msg.id, "sender_id": msg.sender_id, "sender_name": msg.sender_name,
+        "content": msg.content, "created_at": msg.created_at.isoformat(),
+    }, "发送成功")
 
 
 def _app_to_dict(a: CarpoolApplication) -> dict:

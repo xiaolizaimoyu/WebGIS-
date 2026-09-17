@@ -238,6 +238,21 @@ class CarpoolApplication(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.now)
 
 
+# ==================== 拼车聊天（第 15 张表） =====================
+
+class CarpoolMessage(SQLModel, table=True):
+    """拼车聊天消息表：车主与已加入成员之间的真实对话（第 15 张表）"""
+
+    __tablename__ = "carpool_messages"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    carpool_id: int = Field(foreign_key="carpools.id", index=True, description="拼车 ID")
+    sender_id: int = Field(foreign_key="users.id", index=True, description="发送者用户 ID")
+    sender_name: str = Field(max_length=30, description="发送者昵称")
+    content: str = Field(max_length=500, description="消息内容")
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
 # ==================== 地点坐标库（真实坐标手动校准） ====================
 
 class LocationPoint(SQLModel, table=True):
