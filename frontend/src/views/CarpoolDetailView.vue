@@ -1,6 +1,6 @@
 ﻿<script setup>
 // 拼车详情页（前端 C）——申请提交后待车主确认；车主可同意/拒绝；申请人可取消
-import { onMounted, ref, reactive, computed } from 'vue'
+import { onMounted, ref, reactive, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as carpoolApi from '@/api/carpool'
@@ -62,6 +62,19 @@ async function loadDetail() {
   } catch {
     carpool.value = getMockCarpoolDetail(carpoolId)
   }
+  // 设置行程路线地图：出发地/目的地标记，自动绘制橙色虚线并缩放视野
+  nextTick(() => {
+    if (!carpool.value) return
+    const from = coordOf(carpool.value.from, [117.9975, 36.8090])
+    const to = coordOf(carpool.value.to, [118.0430, 36.8490])
+    mapMarkers.value = [
+      { id: 'start', lng: from[0], lat: from[1], title: `出发：${carpool.value.from}` },
+      { id: 'end', lng: to[0], lat: to[1], title: `到达：${carpool.value.to}` }
+    ]
+    nextTick(() => {
+      mapRef.value?.drawRoute?.(from, to)
+    })
+  })
 }
 
 // 打开申请弹窗
