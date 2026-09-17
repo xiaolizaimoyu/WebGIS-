@@ -2,8 +2,8 @@
 // 说明：2021-12 后申请的高德 key 必须配合「安全密钥」(securityJsCode) 使用，
 //       密钥在高德开放平台 → 应用管理 → 对应 key 的「设置」→ JS API 安全密钥 中查看。
 export const AMAP_KEY = '942fa2831e5a2aba83cb0c30f35d0c87'
-// 若页面报 INVALID_USER_SCODE，请把高德控制台的安全密钥填到这里
-export const AMAP_SECURITY_CODE = ''
+// JS API 安全密钥（2021-12 后申请的 key 必须配置，否则路线规划/POI搜索等服务不可用）
+export const AMAP_SECURITY_CODE = '0a27f0902b39b440e482862ac580201e'
 
 let amapPromise = null
 

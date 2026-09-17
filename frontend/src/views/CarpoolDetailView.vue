@@ -353,7 +353,7 @@ onMounted(loadDetail)
         <div class="map-legend">
           <span class="legend-item"><i class="legend-dot start-dot"></i>出发地（绿）</span>
           <span class="legend-item"><i class="legend-dot end-dot"></i>目的地（红）</span>
-          <span class="legend-item"><i class="legend-line"></i>行程路线（橙色虚线）</span>
+          <span class="legend-item"><i class="legend-line"></i>行程路线（真实驾车路线）</span>
         </div>
       </div>
 
@@ -657,7 +657,7 @@ onMounted(loadDetail)
 .legend-line {
   width: 24px;
   height: 0;
-  border-top: 3px dashed #ff7d00;
+  border-top: 3px solid #ff7d00;
   display: inline-block;
 }
 

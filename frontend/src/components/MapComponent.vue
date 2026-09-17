@@ -6,7 +6,7 @@
 //   expose: addMarker / removeMarker / setCenter / fitToMarkers / getMap / highlightMarker / updateSize / drawRoute / clearRoute
 // 坐标系：全链路 GCJ-02（高德火星坐标），传入坐标须为 GCJ-02
 import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { loadAMap } from './map/amap-loader'
+import { loadAMap, loadAMapPlugins } from './map/amap-loader'
 
 const props = defineProps({
   center: { type: Array, default: () => [118.007853, 36.814398] }, // 默认校园中心（淄博山东理工，GCJ-02）
@@ -21,7 +21,8 @@ const mapEl = ref(null)
 let map = null
 let AMap = null
 const markerMap = new Map() // id -> AMap.Marker
-let routeOverlay = null // 路线覆盖物（橙色虚线）
+let routeOverlay = null // 路线覆盖物（橙色）
+let pendingRoute = null // 地图未就绪时暂存的路线请求
 
 // 点位 SVG（默认蓝色）
 function pinSvg(color = '#409eff', highlight = false) {
@@ -77,6 +78,12 @@ async function initMap() {
   })
   renderMarkers()
   emit('ready', map)
+  // 补画地图未就绪时暂存的路线
+  if (pendingRoute) {
+    const { start, end } = pendingRoute
+    pendingRoute = null
+    doDrawRoute(start, end)
+  }
 }
 
 watch(
@@ -127,13 +134,32 @@ defineExpose({
   updateSize: () => {
     if (map) nextTick(() => map.resize())
   },
-  // 绘制出发地→目的地路线（橙色虚线），自动缩放视野
+  // 绘制出发地→目的地路线：优先调高德驾车路线规划（真实道路），失败回退直线虚线
+  // 地图未初始化完成时先暂存，就绪后自动补画
   drawRoute: (start, end) => {
-    if (!map || !AMap || !start || !end) return
-    if (routeOverlay) {
+    if (!start || !end) return
+    if (!map || !AMap) {
+      pendingRoute = { start, end }
+      return
+    }
+    doDrawRoute(start, end)
+  },
+  clearRoute: () => {
+    if (routeOverlay && map) {
       map.remove(routeOverlay)
       routeOverlay = null
     }
+  }
+})
+
+// 实际绘制路线（模块级函数：地图必须已就绪）
+function doDrawRoute(start, end) {
+  if (!map || !AMap || !start || !end) return
+  if (routeOverlay) {
+    map.remove(routeOverlay)
+    routeOverlay = null
+  }
+  const drawStraight = () => {
     routeOverlay = new AMap.Polyline({
       path: [start, end],
       strokeColor: '#ff7d00',
@@ -146,14 +172,54 @@ defineExpose({
     })
     map.add(routeOverlay)
     map.setFitView([routeOverlay], false, [60, 60, 60, 60])
-  },
-  clearRoute: () => {
-    if (routeOverlay && map) {
+  }
+  const drawRouteLine = (path) => {
+    if (routeOverlay) {
       map.remove(routeOverlay)
       routeOverlay = null
     }
+    routeOverlay = new AMap.Polyline({
+      path,
+      strokeColor: '#ff7d00',
+      strokeWeight: 6,
+      strokeOpacity: 0.9,
+      strokeStyle: 'solid',
+      lineJoin: 'round',
+      lineCap: 'round',
+      showDir: true
+    })
+    map.add(routeOverlay)
+    map.setFitView([routeOverlay], false, [60, 60, 60, 60])
   }
-})
+  // 高德驾车路线规划（真实道路）
+  loadAMapPlugins(['AMap.Driving'])
+    .then((A) => {
+      const driving = new A.Driving({
+        map: null,
+        hideMarkers: true,
+        policy: A.DrivingPolicy.LEAST_TIME
+      })
+      driving.search([start[0], start[1]], [end[0], end[1]], (status, result) => {
+        if (
+          status === 'complete' &&
+          result &&
+          result.routes &&
+          result.routes.length
+        ) {
+          const path = []
+          result.routes[0].steps.forEach((s) => {
+            if (s.path && s.path.length) path.push(...s.path)
+          })
+          if (path.length >= 2) {
+            drawRouteLine(path)
+            return
+          }
+        }
+        drawStraight()
+      })
+    })
+    .catch(() => drawStraight())
+}
 
 onMounted(() => {
   nextTick(() => initMap().catch((e) => console.error(e)))
