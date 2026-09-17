@@ -56,6 +56,13 @@ const appsLoading = ref(false)
 const myApp = computed(() => carpool.value?.my_application || null)
 const isAuthor = computed(() => !!carpool.value?.is_author)
 
+// 聊天功能（前端演示：模拟对方自动回复，未接入后端）
+const chatMessages = ref([
+  { id: 1, sender: 'organizer', text: '你好，拼车时间和地点都确认了吗？', time: '10:30' },
+  { id: 2, sender: 'me', text: '是的，我周六早上在南门集合', time: '10:32' },
+  { id: 3, sender: 'organizer', text: '好的，费用每人 80 元，出发前一天再联系你', time: '10:35' }
+])
+
 async function loadDetail() {
   try {
     carpool.value = await carpoolApi.getCarpool(carpoolId)
@@ -325,6 +332,22 @@ onMounted(loadDetail)
           <span class="legend-item"><i class="legend-dot start-dot"></i>出发地（绿）</span>
           <span class="legend-item"><i class="legend-dot end-dot"></i>目的地（红）</span>
           <span class="legend-item"><i class="legend-line"></i>行程路线（橙色虚线）</span>
+        </div>
+      </div>
+
+      <!-- 聊天（前端演示） -->
+      <div class="chat-box">
+        <div class="chat-box-title">💬 与发起人沟通</div>
+        <div class="chat-list">
+          <div
+            v-for="m in chatMessages"
+            :key="m.id"
+            class="chat-msg"
+            :class="m.sender === 'me' ? 'mine' : 'theirs'"
+          >
+            <div class="chat-bubble">{{ m.text }}</div>
+            <div class="chat-time">{{ m.time }}</div>
+          </div>
         </div>
       </div>
 
@@ -605,6 +628,72 @@ onMounted(loadDetail)
   height: 0;
   border-top: 3px dashed #ff7d00;
   display: inline-block;
+}
+
+.chat-box {
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 20px;
+  background: #fafafa;
+}
+
+.chat-box-title {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 10px;
+}
+
+.chat-list {
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px;
+}
+
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 75%;
+}
+
+.chat-msg.mine {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.chat-msg.theirs {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.chat-bubble {
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.chat-msg.mine .chat-bubble {
+  background: #409eff;
+  color: #fff;
+  border-bottom-right-radius: 2px;
+}
+
+.chat-msg.theirs .chat-bubble {
+  background: #fff;
+  color: #303133;
+  border: 1px solid #e4e7ed;
+  border-bottom-left-radius: 2px;
+}
+
+.chat-time {
+  font-size: 11px;
+  color: #909399;
+  margin-top: 3px;
 }
 
 .actions {
