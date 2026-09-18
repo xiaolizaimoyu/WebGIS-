@@ -204,12 +204,6 @@ onMounted(() => {
               <el-dropdown-item command="mine">
                 <span>📝 我的发布</span>
               </el-dropdown-item>
-              <el-dropdown-item v-if="isAdmin" command="admin">
-  <span>🛡️ 管理后台</span>
-</el-dropdown-item>
-              <el-dropdown-item v-if="isAdmin" command="admin-locations">
-                <span>📍 地点坐标管理</span>
-              </el-dropdown-item>
               <el-dropdown-item command="mall">
                 <span>🎁 积分商城</span>
               </el-dropdown-item>
