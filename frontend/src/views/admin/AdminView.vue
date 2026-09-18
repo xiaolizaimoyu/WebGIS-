@@ -140,6 +140,7 @@ onMounted(() => {
         <span class="brand">🛡️ 管理后台</span>
         <div class="spacer" />
         <span class="admin-name">{{ store.userInfo?.nickname }}</span>
+        <el-button size="small" type="primary" plain @click="router.push('/admin/locations')">📍 地点坐标管理</el-button>
         <el-button size="small" @click="onLogout">退出</el-button>
       </div>
     </header>
