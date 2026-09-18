@@ -1,6 +1,9 @@
 ﻿// 管理员接口（前端 A 使用，对接后端 D 的 /api/admin）
 import request from './request'
 
+// 管理员登录（独立入口，普通接口会拦截管理员账号）
+export const adminLogin = (data) => request.post('/admin/login', data)
+
 // 概览统计：{ total_users, total_contents, total_comments, today_new_users, today_new_contents }
 export const getStats = () => request.get('/admin/stats')
 

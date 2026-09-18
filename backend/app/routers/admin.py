@@ -12,11 +12,54 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.admin import get_current_admin
+from app.core.config import JWT_EXPIRE_MINUTES
 from app.core.response import BizError, ok
+from app.core.security import create_token, verify_password
 from app.db import get_session
 from app.models import Comment, Content, Order, Favorite, Like, LocationPoint, User
+# 复用用户模块的登录辅助函数（验证码/限流/失败计数），避免重复实现
+from app.routers.user import (
+    _captcha_verify,
+    _check_login_limit,
+    _clear_login_failure,
+    _client_ip,
+    _record_login_failure,
+    user_public,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
+
+
+class AdminLoginIn(BaseModel):
+    username: str
+    password: str
+    captcha_id: str
+    captcha_code: str
+
+
+@router.post("/login", summary="管理员登录（独立入口）")
+def admin_login(data: AdminLoginIn, request: Request, session: Session = Depends(get_session)):
+    """管理员专用登录入口：仅允许 is_admin 账号，普通账号在此拒绝。
+
+    与普通用户登录接口（/api/user/login）相互独立——普通接口拦截管理员，
+    本接口拦截普通用户，两条通道互不影响。
+    """
+    ip = _client_ip(request)
+    if not _captcha_verify(data.captcha_id, data.captcha_code):
+        raise BizError(1010, "验证码错误或已过期，请刷新后重试")
+    _check_login_limit(data.username, ip)
+    user = session.exec(select(User).where(User.username == data.username)).first()
+    if user is None or not verify_password(data.password, user.password_hash):
+        _record_login_failure(data.username, ip)
+        raise BizError(1001, "用户名或密码错误")
+    if not getattr(user, "is_admin", False):
+        raise BizError(1003, "该账号不是管理员，请前往用户端登录")
+    _clear_login_failure(data.username, ip)
+    token = create_token(user.id)
+    return ok(
+        {"token": token, "expires_in": JWT_EXPIRE_MINUTES * 60, "user": user_public(user)},
+        "登录成功",
+    )
 
 
 def _content_to_dict(content: Content, author_name: str) -> dict:

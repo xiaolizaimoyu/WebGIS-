@@ -44,7 +44,7 @@ async function submit() {
   }
   loading.value = true
   try {
-    await store.login({ ...form, captcha_id: captchaId.value })
+    await store.adminLogin({ ...form, captcha_id: captchaId.value })
     // 校验是否管理员
     if (!store.isAdmin) {
       ElMessage.error('该账号无管理员权限')
