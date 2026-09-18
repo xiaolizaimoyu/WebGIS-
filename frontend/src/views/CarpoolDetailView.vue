@@ -173,12 +173,19 @@ const canChat = computed(() => {
   return myApp.value?.status === 'approved'
 })
 
+// 只在聊天列表内部滚动到底部（不影响整个页面位置）
+function scrollChatToBottom(force) {
+  const list = chatListRef.value
+  if (!list) return
+  const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 60
+  if (force || nearBottom) {
+    list.scrollTop = list.scrollHeight
+  }
+}
+
 async function loadMessages(scroll = 'auto') {
   if (!canChat.value || !carpool.value) return
   try {
-    // 记录当前是否已在聊天区底部（用户正在往上翻历史时不再强制下拉）
-    const list = chatListRef.value
-    const wasAtBottom = !list || list.scrollHeight - list.scrollTop - list.clientHeight < 60
     const items = (await carpoolApi.listMessages(carpool.value.id))?.items || []
     chatMessages.value = items.map((m) => ({
       id: m.id,
@@ -187,10 +194,12 @@ async function loadMessages(scroll = 'auto') {
       text: m.content,
       time: (m.created_at || '').slice(11, 16)
     }))
+    // 发送消息后或本来就停在底部时，才在聊天列表内滚动到最新（不滚动整个页面）
     nextTick(() => {
-      // 发送消息后或本来就停在底部时，才平滑滚动到最新消息
-      if (scroll === 'force' || wasAtBottom) {
-        chatEndRef.value?.scrollIntoView({ behavior: 'smooth' })
+      if (scroll === 'force') {
+        scrollChatToBottom(true)
+      } else {
+        scrollChatToBottom(false)
       }
     })
   } catch {
