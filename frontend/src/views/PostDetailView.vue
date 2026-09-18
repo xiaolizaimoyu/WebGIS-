@@ -164,6 +164,8 @@ function goToDetail(id) {
               <el-tag :type="TYPE_MAP[item.type]?.tagType || 'info'" size="small">
                 {{ TYPE_MAP[item.type]?.label || item.type }}
               </el-tag>
+              <el-tag v-if="item.is_top" type="danger" size="small" effect="dark">置顶</el-tag>
+              <el-tag v-if="item.is_essence" type="warning" size="small" effect="dark">精华</el-tag>
               <span class="meta-time">{{ formatTime(item.created_at) }}</span>
             </div>
 

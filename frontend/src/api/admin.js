@@ -28,3 +28,19 @@ export const listOrders = (params) => request.get('/admin/orders', { params })
 // 更新订单发货状态：status = shipping | delivered | cancelled
 export const updateOrderStatus = (id, status) =>
   request.patch(`/admin/orders/${id}/status`, { status })
+
+// 审核帖子：audit_status = approved（通过）| rejected（驳回）
+export const auditContent = (id, audit_status) =>
+  request.patch(`/admin/contents/${id}/audit`, { audit_status })
+
+// 置顶 / 取消置顶
+export const toggleTop = (id, is_top) =>
+  request.patch(`/admin/contents/${id}/top`, { is_top })
+
+// 加精 / 取消加精
+export const toggleEssence = (id, is_essence) =>
+  request.patch(`/admin/contents/${id}/essence`, { is_essence })
+
+// 封禁 / 解封用户
+export const banUser = (id, is_banned) =>
+  request.patch(`/admin/users/${id}/ban`, { is_banned })

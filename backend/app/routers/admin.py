@@ -72,6 +72,9 @@ def _content_to_dict(content: Content, author_name: str) -> dict:
         "category": content.category,
         "images": content.images or [],
         "author_id": content.author_id,
+        "is_top": getattr(content, "is_top", False),
+        "is_essence": getattr(content, "is_essence", False),
+        "audit_status": getattr(content, "audit_status", "approved") or "approved",
         "author_name": author_name,
         "created_at": content.created_at,
     }
@@ -118,15 +121,18 @@ def admin_list_contents(
     page: int = 1,
     page_size: int = 20,
     type: Optional[str] = None,
+    audit_status: Optional[str] = None,
     session: Session = Depends(get_session),
     admin: User = Depends(get_current_admin),
 ):
-    """分页列出所有帖子（含他人帖），供管理员审核。可按 type 筛选。"""
+    """分页列出所有帖子（含他人帖），供管理员审核。可按 type / audit_status 筛选。"""
     page = max(page, 1)
     page_size = max(min(page_size, 100), 1)
     stmt = select(Content)
     if type:
         stmt = stmt.where(Content.type == type)
+    if audit_status:
+        stmt = stmt.where(Content.audit_status == audit_status)
     total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
     items = session.exec(
         stmt.order_by(Content.created_at.desc())
@@ -177,6 +183,7 @@ def _user_with_stats(user: User, session: Session) -> dict:
         "username": user.username,
         "nickname": user.nickname,
         "is_admin": getattr(user, "is_admin", False),
+        "is_banned": getattr(user, "is_banned", False),
         "content_count": content_count,
         "comment_count": comment_count,
         "created_at": user.created_at,
@@ -236,6 +243,102 @@ def admin_delete_user(
         session.rollback()
         raise BizError(1007, "该用户存在关联内容/评论，无法直接删除")
     return ok({"id": user_id, "deleted": True}, "用户已删除")
+
+
+class _AuditIn(BaseModel):
+    audit_status: str
+
+
+class _TopIn(BaseModel):
+    is_top: bool
+
+
+class _EssenceIn(BaseModel):
+    is_essence: bool
+
+
+class _BanIn(BaseModel):
+    is_banned: bool
+
+
+@router.patch("/contents/{content_id}/audit", summary="审核帖子：通过/驳回")
+def admin_audit_content(
+    content_id: int,
+    data: _AuditIn,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    """管理员审核帖子：pending -> approved（通过）/ rejected（驳回）。"""
+    if data.audit_status not in ("approved", "rejected"):
+        raise BizError(400, "审核状态仅支持 approved / rejected")
+    content = session.get(Content, content_id)
+    if content is None:
+        raise BizError(2001, "内容不存在或已被删除")
+    content.audit_status = data.audit_status
+    session.add(content)
+    session.commit()
+    session.refresh(content)
+    return ok({"id": content.id, "audit_status": content.audit_status},
+              "已通过审核" if data.audit_status == "approved" else "已驳回该帖")
+
+
+@router.patch("/contents/{content_id}/top", summary="置顶/取消置顶")
+def admin_toggle_top(
+    content_id: int,
+    data: _TopIn,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    content = session.get(Content, content_id)
+    if content is None:
+        raise BizError(2001, "内容不存在或已被删除")
+    content.is_top = data.is_top
+    session.add(content)
+    session.commit()
+    session.refresh(content)
+    return ok({"id": content.id, "is_top": content.is_top},
+              "已置顶" if data.is_top else "已取消置顶")
+
+
+@router.patch("/contents/{content_id}/essence", summary="加精/取消加精")
+def admin_toggle_essence(
+    content_id: int,
+    data: _EssenceIn,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    content = session.get(Content, content_id)
+    if content is None:
+        raise BizError(2001, "内容不存在或已被删除")
+    content.is_essence = data.is_essence
+    session.add(content)
+    session.commit()
+    session.refresh(content)
+    return ok({"id": content.id, "is_essence": content.is_essence},
+              "已加精" if data.is_essence else "已取消加精")
+
+
+@router.patch("/users/{user_id}/ban", summary="封禁/解封用户")
+def admin_ban_user(
+    user_id: int,
+    data: _BanIn,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    """封禁用户：被封禁后无法登录，已登录会话也立即失效。"""
+    target = session.get(User, user_id)
+    if target is None:
+        raise BizError(1005, "用户不存在")
+    if target.id == admin.id:
+        raise BizError(1012, "不能封禁当前登录的管理员账号")
+    if getattr(target, "is_admin", False):
+        raise BizError(1012, "不能封禁管理员账号")
+    target.is_banned = data.is_banned
+    session.add(target)
+    session.commit()
+    session.refresh(target)
+    return ok({"id": target.id, "is_banned": target.is_banned},
+              "已封禁该用户" if data.is_banned else "已解封该用户")
 
 
 @router.delete("/comments/{comment_id}", summary="删除任意评论")

@@ -39,6 +39,7 @@ class User(SQLModel, table=True):
     points: int = Field(default=0, description="积分余额，签到/发帖/评论增加，兑换商品扣减")
     created_at: datetime = Field(default_factory=datetime.now)
     is_admin: bool = Field(default=False, description='是否管理员')
+    is_banned: bool = Field(default=False, description='是否封禁：封禁后无法登录与操作')
 
 
 class Content(SQLModel, table=True):
@@ -62,6 +63,9 @@ class Content(SQLModel, table=True):
     view_count: int = Field(default=0, description="浏览量")
     like_count: int = Field(default=0, description="点赞数（冗余，避免每次 count 查询）")
     author_id: int = Field(foreign_key="users.id", index=True)
+    is_top: bool = Field(default=False, description='是否置顶：置顶帖在列表最前')
+    is_essence: bool = Field(default=False, description='是否加精：精华帖展示标签')
+    audit_status: str = Field(default="approved", description='审核状态：pending待审核 / approved已通过 / rejected已驳回')
     created_at: datetime = Field(default_factory=datetime.now)
 
 

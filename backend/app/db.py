@@ -48,6 +48,10 @@ def _sync_columns() -> None:
         "stock": 0,
         "is_read": 0,
         "status": "on",
+        "is_top": 0,
+        "is_essence": 0,
+        "is_banned": 0,
+        "audit_status": "approved",
     }
     for table_name, model in tables.items():
         if not inspector.has_table(table_name):

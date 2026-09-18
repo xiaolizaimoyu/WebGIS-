@@ -236,6 +236,10 @@ onMounted(() => {
                 <el-tag :type="TYPE_MAP[c.type]?.tagType || 'info'" size="small">
                   {{ TYPE_MAP[c.type]?.label || c.type }}
                 </el-tag>
+                <el-tag v-if="c.audit_status === 'pending'" type="warning" size="small">待审核</el-tag>
+                <el-tag v-else-if="c.audit_status === 'rejected'" type="danger" size="small">已驳回</el-tag>
+                <el-tag v-if="c.is_top" type="danger" size="small" effect="dark">置顶</el-tag>
+                <el-tag v-if="c.is_essence" type="warning" size="small" effect="dark">精华</el-tag>
                 <span v-if="c.category" class="category">· {{ c.category }}</span>
               </div>
               <h3 class="title">{{ c.title }}</h3>
