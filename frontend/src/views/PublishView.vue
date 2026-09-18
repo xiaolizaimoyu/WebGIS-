@@ -289,6 +289,7 @@ async function submit() {
             type="textarea"
             :rows="6"
             maxlength="5000"
+            show-word-limit
             placeholder="详细描述内容……（活动可写时间地点，广告可写价格联系方式等）"
           />
         </el-form-item>
