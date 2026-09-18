@@ -184,6 +184,9 @@ def content_to_dict(content: Content, author_name: str, comment_count: int = 0, 
         "comment_count": comment_count,
         "view_count": content.view_count,
         "like_count": content.like_count,
+        "is_top": content.is_top,
+        "is_essence": content.is_essence,
+        "audit_status": getattr(content, "audit_status", "approved") or "approved",
         "created_at": content.created_at,
     }
     # 详情接口可选鉴权时传入，前端据此决定是否显示编辑/删除按钮
@@ -255,7 +258,7 @@ def _query_contents_page(
             select(Content, func.coalesce(count_sub.c.cc, 0).label("comment_count"))
             .outerjoin(count_sub, count_sub.c.content_id == Content.id)
             .where(*filters)
-            .order_by(func.coalesce(count_sub.c.cc, 0).desc(), Content.created_at.desc(), Content.id.desc())
+            .order_by(Content.is_top.desc(), func.coalesce(count_sub.c.cc, 0).desc(), Content.created_at.desc(), Content.id.desc())
             .offset((page - 1) * size)
             .limit(size)
         )
@@ -266,7 +269,7 @@ def _query_contents_page(
         stmt = (
             select(Content)
             .where(*filters)
-            .order_by(Content.created_at.desc(), Content.id.desc())
+            .order_by(Content.is_top.desc(), Content.created_at.desc(), Content.id.desc())
             .offset((page - 1) * size)
             .limit(size)
         )
@@ -318,11 +321,12 @@ def create_content(
         latitude=latitude,
         location_name=(data.location_name or "").strip() or None if longitude is not None else None,
         author_id=user.id,
+        audit_status="pending",
     )
     session.add(content)
     session.commit()
     session.refresh(content)
-    return ok(content_to_dict(content, user.nickname, is_author=True), "发布成功")
+    return ok(content_to_dict(content, user.nickname, is_author=True), "发布成功，内容已提交审核，审核通过后展示")
 
 
 @router.get("/contents", summary="内容列表（首页信息流 / 地图点位 / 搜索）")
@@ -345,6 +349,8 @@ def list_contents(
         type=type, keyword=keyword, author_id=author_id, category=category,
         min_view_count=min_view_count, has_location=has_location,
     )
+    # 审核过滤：普通用户只能看到已通过的帖子（作者查看自己的内容走 /contents/mine）
+    filters.append(Content.audit_status == "approved")
     items, count_map, total = _query_contents_page(session, filters, sort, page, size)
     name_map = users_nickname_map(session, [c.author_id for c in items])
     return ok({
@@ -416,7 +422,7 @@ def list_hot_contents(
     """
     _validate_optional_type(type)
     since = datetime.now() - timedelta(days=days)
-    where = [Content.created_at >= since]
+    where = [Content.created_at >= since, Content.audit_status == "approved"]
     if type:
         where.append(Content.type == type)
     stmt = (
@@ -459,6 +465,7 @@ def update_content(
     content.longitude = longitude
     content.latitude = latitude
     content.location_name = (data.location_name or "").strip() or None if longitude is not None else None
+    content.audit_status = "pending"  # 编辑后重新进入审核
     session.add(content)
     session.commit()
     session.refresh(content)
@@ -500,6 +507,10 @@ def get_content(
     current_user: Optional[User] = Depends(_get_optional_user),
 ):
     content = _require_content(session, content_id)
+    # 审核保护：普通用户不能查看待审/驳回内容（作者本人可查看自己的）
+    is_author = content.author_id == current_user.id if current_user is not None else None
+    if not is_author and (getattr(content, "audit_status", "approved") or "approved") != "approved":
+        raise BizError(404, "内容不存在或未通过审核")
     # 浏览量自增（直接 SQL 更新保证原子性，避免 ORM 乐观锁冲突）。
     # commit 后对象会过期，直接在内存设置已知新值，省一次 refresh 查询。
     current_view = content.view_count or 0
@@ -513,8 +524,6 @@ def get_content(
     comment_count = session.exec(
         select(func.count(Comment.id)).where(Comment.content_id == content.id)
     ).one()
-    # 可选鉴权：已登录时返回 is_author，前端据此显示编辑/删除按钮
-    is_author = content.author_id == current_user.id if current_user is not None else None
     return ok(content_to_dict(content, author.nickname if author else "未知用户", comment_count, is_author))
 
 

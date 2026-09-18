@@ -101,4 +101,7 @@ def get_current_user(request: Request, session: Session = Depends(get_session)) 
     user = session.get(User, int(payload["sub"]))
     if user is None:
         raise BizError(401, "用户不存在，请重新登录")
+    # 封禁拦截：被封禁后已登录会话也立即失效
+    if getattr(user, "is_banned", False):
+        raise BizError(401, "该账号已被封禁，请联系管理员")
     return user

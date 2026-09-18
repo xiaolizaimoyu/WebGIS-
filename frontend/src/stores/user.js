@@ -2,6 +2,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import * as userApi from '@/api/user'
+import * as adminApi from '@/api/admin'
 import * as signApi from '@/api/sign'
 import { getMockSignStatus } from '@/utils/mockData'
 
@@ -21,6 +22,15 @@ export const useUserStore = defineStore('user', () => {
   // 登录成功：存 Pinia 状态 + localStorage
   async function login(form) {
     const data = await userApi.login(form)
+    token.value = data.token
+    userInfo.value = data.user
+    localStorage.setItem('campus_token', data.token)
+    localStorage.setItem('campus_user', JSON.stringify(data.user))
+  }
+
+  // 管理员登录（独立入口）：与普通登录共用 token/userInfo 持久化
+  async function adminLogin(form) {
+    const data = await adminApi.adminLogin(form)
     token.value = data.token
     userInfo.value = data.user
     localStorage.setItem('campus_token', data.token)
@@ -102,6 +112,7 @@ export const useUserStore = defineStore('user', () => {
     isLoggedIn,
     isAdmin,
     login,
+    adminLogin,
     setUser,
     logout,
     fetchSignStatus,

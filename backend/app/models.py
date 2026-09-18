@@ -39,6 +39,7 @@ class User(SQLModel, table=True):
     points: int = Field(default=0, description="积分余额，签到/发帖/评论增加，兑换商品扣减")
     created_at: datetime = Field(default_factory=datetime.now)
     is_admin: bool = Field(default=False, description='是否管理员')
+    is_banned: bool = Field(default=False, description='是否封禁：封禁后无法登录与操作')
 
 
 class Content(SQLModel, table=True):
@@ -62,6 +63,9 @@ class Content(SQLModel, table=True):
     view_count: int = Field(default=0, description="浏览量")
     like_count: int = Field(default=0, description="点赞数（冗余，避免每次 count 查询）")
     author_id: int = Field(foreign_key="users.id", index=True)
+    is_top: bool = Field(default=False, description='是否置顶：置顶帖在列表最前')
+    is_essence: bool = Field(default=False, description='是否加精：精华帖展示标签')
+    audit_status: str = Field(default="approved", description='审核状态：pending待审核 / approved已通过 / rejected已驳回')
     created_at: datetime = Field(default_factory=datetime.now)
 
 
@@ -235,6 +239,21 @@ class CarpoolApplication(SQLModel, table=True):
     remark: str = Field(default="", max_length=300, description="申请备注")
     status: str = Field(default="pending", index=True,
                         description="pending 待确认 / approved 已同意 / rejected 已拒绝 / cancelled 已取消")
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
+# ==================== 拼车聊天（第 15 张表） =====================
+
+class CarpoolMessage(SQLModel, table=True):
+    """拼车聊天消息表：车主与已加入成员之间的真实对话（第 15 张表）"""
+
+    __tablename__ = "carpool_messages"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    carpool_id: int = Field(foreign_key="carpools.id", index=True, description="拼车 ID")
+    sender_id: int = Field(foreign_key="users.id", index=True, description="发送者用户 ID")
+    sender_name: str = Field(max_length=30, description="发送者昵称")
+    content: str = Field(max_length=500, description="消息内容")
     created_at: datetime = Field(default_factory=datetime.now)
 
 

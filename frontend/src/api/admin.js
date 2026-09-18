@@ -1,6 +1,9 @@
 ﻿// 管理员接口（前端 A 使用，对接后端 D 的 /api/admin）
 import request from './request'
 
+// 管理员登录（独立入口，普通接口会拦截管理员账号）
+export const adminLogin = (data) => request.post('/admin/login', data)
+
 // 概览统计：{ total_users, total_contents, total_comments, today_new_users, today_new_contents }
 export const getStats = () => request.get('/admin/stats')
 
@@ -18,3 +21,26 @@ export const deleteUser = (id) => request.delete(`/admin/users/${id}`)
 
 // 删除任意评论
 export const deleteComment = (id) => request.delete(`/admin/comments/${id}`)
+
+// 订单发货管理列表（分页）：{ total, page, page_size, list: [...] }
+export const listOrders = (params) => request.get('/admin/orders', { params })
+
+// 更新订单发货状态：status = shipping | delivered | cancelled
+export const updateOrderStatus = (id, status) =>
+  request.patch(`/admin/orders/${id}/status`, { status })
+
+// 审核帖子：audit_status = approved（通过）| rejected（驳回）
+export const auditContent = (id, audit_status) =>
+  request.patch(`/admin/contents/${id}/audit`, { audit_status })
+
+// 置顶 / 取消置顶
+export const toggleTop = (id, is_top) =>
+  request.patch(`/admin/contents/${id}/top`, { is_top })
+
+// 加精 / 取消加精
+export const toggleEssence = (id, is_essence) =>
+  request.patch(`/admin/contents/${id}/essence`, { is_essence })
+
+// 封禁 / 解封用户
+export const banUser = (id, is_banned) =>
+  request.patch(`/admin/users/${id}/ban`, { is_banned })

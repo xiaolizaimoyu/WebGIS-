@@ -1,4 +1,4 @@
-﻿"""管理员路由（归属：后端 D）
+"""管理员路由（归属：后端 D）
 
 前缀 /api/admin，所有接口都需 Depends(get_current_admin)。
 功能：概览统计、帖子审核（列出/删除任意帖）、用户管理、评论删除。
@@ -12,11 +12,54 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.admin import get_current_admin
+from app.core.config import JWT_EXPIRE_MINUTES
 from app.core.response import BizError, ok
+from app.core.security import create_token, verify_password
 from app.db import get_session
-from app.models import Comment, Content, Favorite, Like, LocationPoint, User
+from app.models import Comment, Content, Order, Favorite, Like, LocationPoint, User
+# 复用用户模块的登录辅助函数（验证码/限流/失败计数），避免重复实现
+from app.routers.user import (
+    _captcha_verify,
+    _check_login_limit,
+    _clear_login_failure,
+    _client_ip,
+    _record_login_failure,
+    user_public,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["管理员"])
+
+
+class AdminLoginIn(BaseModel):
+    username: str
+    password: str
+    captcha_id: str
+    captcha_code: str
+
+
+@router.post("/login", summary="管理员登录（独立入口）")
+def admin_login(data: AdminLoginIn, request: Request, session: Session = Depends(get_session)):
+    """管理员专用登录入口：仅允许 is_admin 账号，普通账号在此拒绝。
+
+    与普通用户登录接口（/api/user/login）相互独立——普通接口拦截管理员，
+    本接口拦截普通用户，两条通道互不影响。
+    """
+    ip = _client_ip(request)
+    if not _captcha_verify(data.captcha_id, data.captcha_code):
+        raise BizError(1010, "验证码错误或已过期，请刷新后重试")
+    _check_login_limit(data.username, ip)
+    user = session.exec(select(User).where(User.username == data.username)).first()
+    if user is None or not verify_password(data.password, user.password_hash):
+        _record_login_failure(data.username, ip)
+        raise BizError(1001, "用户名或密码错误")
+    if not getattr(user, "is_admin", False):
+        raise BizError(1003, "该账号不是管理员，请前往用户端登录")
+    _clear_login_failure(data.username, ip)
+    token = create_token(user.id)
+    return ok(
+        {"token": token, "expires_in": JWT_EXPIRE_MINUTES * 60, "user": user_public(user)},
+        "登录成功",
+    )
 
 
 def _content_to_dict(content: Content, author_name: str) -> dict:
@@ -29,6 +72,9 @@ def _content_to_dict(content: Content, author_name: str) -> dict:
         "category": content.category,
         "images": content.images or [],
         "author_id": content.author_id,
+        "is_top": getattr(content, "is_top", False),
+        "is_essence": getattr(content, "is_essence", False),
+        "audit_status": getattr(content, "audit_status", "approved") or "approved",
         "author_name": author_name,
         "created_at": content.created_at,
     }
@@ -75,15 +121,18 @@ def admin_list_contents(
     page: int = 1,
     page_size: int = 20,
     type: Optional[str] = None,
+    audit_status: Optional[str] = None,
     session: Session = Depends(get_session),
     admin: User = Depends(get_current_admin),
 ):
-    """分页列出所有帖子（含他人帖），供管理员审核。可按 type 筛选。"""
+    """分页列出所有帖子（含他人帖），供管理员审核。可按 type / audit_status 筛选。"""
     page = max(page, 1)
     page_size = max(min(page_size, 100), 1)
     stmt = select(Content)
     if type:
         stmt = stmt.where(Content.type == type)
+    if audit_status:
+        stmt = stmt.where(Content.audit_status == audit_status)
     total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
     items = session.exec(
         stmt.order_by(Content.created_at.desc())
@@ -134,6 +183,7 @@ def _user_with_stats(user: User, session: Session) -> dict:
         "username": user.username,
         "nickname": user.nickname,
         "is_admin": getattr(user, "is_admin", False),
+        "is_banned": getattr(user, "is_banned", False),
         "content_count": content_count,
         "comment_count": comment_count,
         "created_at": user.created_at,
@@ -195,6 +245,102 @@ def admin_delete_user(
     return ok({"id": user_id, "deleted": True}, "用户已删除")
 
 
+class _AuditIn(BaseModel):
+    audit_status: str
+
+
+class _TopIn(BaseModel):
+    is_top: bool
+
+
+class _EssenceIn(BaseModel):
+    is_essence: bool
+
+
+class _BanIn(BaseModel):
+    is_banned: bool
+
+
+@router.patch("/contents/{content_id}/audit", summary="审核帖子：通过/驳回")
+def admin_audit_content(
+    content_id: int,
+    data: _AuditIn,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    """管理员审核帖子：pending -> approved（通过）/ rejected（驳回）。"""
+    if data.audit_status not in ("approved", "rejected"):
+        raise BizError(400, "审核状态仅支持 approved / rejected")
+    content = session.get(Content, content_id)
+    if content is None:
+        raise BizError(2001, "内容不存在或已被删除")
+    content.audit_status = data.audit_status
+    session.add(content)
+    session.commit()
+    session.refresh(content)
+    return ok({"id": content.id, "audit_status": content.audit_status},
+              "已通过审核" if data.audit_status == "approved" else "已驳回该帖")
+
+
+@router.patch("/contents/{content_id}/top", summary="置顶/取消置顶")
+def admin_toggle_top(
+    content_id: int,
+    data: _TopIn,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    content = session.get(Content, content_id)
+    if content is None:
+        raise BizError(2001, "内容不存在或已被删除")
+    content.is_top = data.is_top
+    session.add(content)
+    session.commit()
+    session.refresh(content)
+    return ok({"id": content.id, "is_top": content.is_top},
+              "已置顶" if data.is_top else "已取消置顶")
+
+
+@router.patch("/contents/{content_id}/essence", summary="加精/取消加精")
+def admin_toggle_essence(
+    content_id: int,
+    data: _EssenceIn,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    content = session.get(Content, content_id)
+    if content is None:
+        raise BizError(2001, "内容不存在或已被删除")
+    content.is_essence = data.is_essence
+    session.add(content)
+    session.commit()
+    session.refresh(content)
+    return ok({"id": content.id, "is_essence": content.is_essence},
+              "已加精" if data.is_essence else "已取消加精")
+
+
+@router.patch("/users/{user_id}/ban", summary="封禁/解封用户")
+def admin_ban_user(
+    user_id: int,
+    data: _BanIn,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    """封禁用户：被封禁后无法登录，已登录会话也立即失效。"""
+    target = session.get(User, user_id)
+    if target is None:
+        raise BizError(1005, "用户不存在")
+    if target.id == admin.id:
+        raise BizError(1012, "不能封禁当前登录的管理员账号")
+    if getattr(target, "is_admin", False):
+        raise BizError(1012, "不能封禁管理员账号")
+    target.is_banned = data.is_banned
+    session.add(target)
+    session.commit()
+    session.refresh(target)
+    return ok({"id": target.id, "is_banned": target.is_banned},
+              "已封禁该用户" if data.is_banned else "已解封该用户")
+
+
 @router.delete("/comments/{comment_id}", summary="删除任意评论")
 def admin_delete_comment(
     comment_id: int,
@@ -208,6 +354,85 @@ def admin_delete_comment(
     session.delete(comment)
     session.commit()
     return ok({"id": comment_id, "deleted": True}, "管理员已删除该评论")
+
+
+# ==================== 订单发货管理（积分商城） ====================
+
+# 订单状态流转规则：与 mall.py ORDER_FLOW 保持一致
+_ADMIN_ORDER_FLOW = {
+    "pending": {"shipping", "delivered", "cancelled"},
+    "shipping": {"delivered", "cancelled"},
+    "delivered": set(),
+    "cancelled": set(),
+}
+
+
+class OrderStatusIn(BaseModel):
+    status: str  # shipping | delivered | cancelled
+
+
+@router.get("/orders", summary="订单发货管理列表（分页）")
+def admin_list_orders(
+    page: int = 1,
+    page_size: int = 20,
+    status: str = "",
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    """管理员查看所有兑换订单，可按状态筛选，用于发货管理。"""
+    page = max(page, 1)
+    page_size = max(min(page_size, 100), 1)
+    stmt = select(Order)
+    if status:
+        stmt = stmt.where(Order.status == status)
+    total = session.exec(select(func.count()).select_from(stmt.subquery())).one()
+    orders = session.exec(
+        stmt.order_by(Order.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    return ok({
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "list": [
+            {
+                "id": o.id,
+                "user_id": o.user_id,
+                "goods_id": o.goods_id,
+                "goods_name": o.goods_name,
+                "points_cost": o.points_cost,
+                "quantity": getattr(o, "quantity", 1),
+                "status": o.status,
+                "created_at": o.created_at,
+            }
+            for o in orders
+        ],
+    })
+
+
+@router.patch("/orders/{order_id}/status", summary="更新订单发货状态")
+def admin_update_order_status(
+    order_id: int,
+    data: OrderStatusIn,
+    session: Session = Depends(get_session),
+    admin: User = Depends(get_current_admin),
+):
+    """管理员更新订单发货状态：pending -> shipping -> delivered，或置为 cancelled。
+
+    合法流转见 _ADMIN_ORDER_FLOW。非法流转返回 400。
+    """
+    order = session.get(Order, order_id)
+    if order is None:
+        raise BizError(2001, "订单不存在")
+    if data.status not in _ADMIN_ORDER_FLOW:
+        raise BizError(400, f"未知状态：{data.status}")
+    if data.status not in _ADMIN_ORDER_FLOW.get(order.status, set()):
+        raise BizError(400, f"状态非法流转：{order.status} -> {data.status}")
+    order.status = data.status
+    session.add(order)
+    session.commit()
+    return ok({"id": order_id, "status": data.status}, "订单状态已更新")
 
 
 # ==================== 地点坐标管理（发布选点/地图点位校准） ====================

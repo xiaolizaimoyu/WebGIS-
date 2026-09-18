@@ -284,6 +284,12 @@ def login(data: LoginCaptchaIn, request: Request, session: Session = Depends(get
         _record_login_failure(data.username, ip)
         logger.info("登录失败 username=%s ip=%s", data.username, ip)
         raise BizError(1001, "用户名或密码错误")
+    # 管理员账号禁止从普通用户入口登录，统一走管理员登录入口
+    if getattr(user, "is_admin", False):
+        raise BizError(1002, "管理员账号请从管理员登录入口登录")
+    # 封禁账号禁止登录
+    if getattr(user, "is_banned", False):
+        raise BizError(1005, "该账号已被封禁，请联系管理员")
     _clear_login_failure(data.username, ip)
     logger.info("登录成功 username=%s ip=%s", data.username, ip)
     token = create_token(user.id)

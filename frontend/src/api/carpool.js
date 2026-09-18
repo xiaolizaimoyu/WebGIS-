@@ -31,5 +31,14 @@ export const approveApplication = (cid, aid) => request.post(`/carpools/${cid}/a
 // 车主：拒绝申请
 export const rejectApplication = (cid, aid) => request.post(`/carpools/${cid}/applications/${aid}/reject`)
 
-// 申请人：取消申请
+// 申请人：取消申请 / 退出拼车（已加入后可退出并释放座位）
 export const cancelApplication = (cid, aid) => request.post(`/carpools/${cid}/applications/${aid}/cancel`)
+
+// 车主：移除已加入成员
+export const removeMember = (cid, aid) => request.post(`/carpools/${cid}/applications/${aid}/remove`)
+
+// 拼车聊天：获取消息列表
+export const listMessages = (cid) => request.get(`/carpools/${cid}/messages`)
+
+// 拼车聊天：发送消息
+export const sendMessage = (cid, content) => request.post(`/carpools/${cid}/messages`, { content })
