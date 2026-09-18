@@ -268,6 +268,7 @@ onUnmounted(() => {
           <span v-if="content.category" class="category">· {{ content.category }}</span>
           <span class="meta">
             {{ content.author_name }} 发布于 {{ formatTime(content.created_at) }}
+            <span class="view-count">👁 {{ content.view_count || 0 }} 浏览</span>
           </span>
         </div>
 
@@ -419,6 +420,10 @@ onUnmounted(() => {
   margin-left: auto;
   color: #a8abb2;
   font-size: 12px;
+}
+
+.view-count {
+  margin-left: 8px;
 }
 
 .title {
