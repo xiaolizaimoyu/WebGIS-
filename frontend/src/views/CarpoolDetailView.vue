@@ -162,6 +162,7 @@ async function handleRemoveMember(a) {
 const chatMessages = ref([])
 const chatInput = ref('')
 const chatEndRef = ref(null)
+const chatListRef = ref(null)
 const chatLoading = ref(false)
 let chatTimer = null
 
@@ -172,9 +173,12 @@ const canChat = computed(() => {
   return myApp.value?.status === 'approved'
 })
 
-async function loadMessages() {
+async function loadMessages(scroll = 'auto') {
   if (!canChat.value || !carpool.value) return
   try {
+    // 记录当前是否已在聊天区底部（用户正在往上翻历史时不再强制下拉）
+    const list = chatListRef.value
+    const wasAtBottom = !list || list.scrollHeight - list.scrollTop - list.clientHeight < 60
     const items = (await carpoolApi.listMessages(carpool.value.id))?.items || []
     chatMessages.value = items.map((m) => ({
       id: m.id,
@@ -183,7 +187,12 @@ async function loadMessages() {
       text: m.content,
       time: (m.created_at || '').slice(11, 16)
     }))
-    nextTick(() => chatEndRef.value?.scrollIntoView({ behavior: 'smooth' }))
+    nextTick(() => {
+      // 发送消息后或本来就停在底部时，才平滑滚动到最新消息
+      if (scroll === 'force' || wasAtBottom) {
+        chatEndRef.value?.scrollIntoView({ behavior: 'smooth' })
+      }
+    })
   } catch {
     /* 无权限或失败时静默 */
   }
@@ -199,7 +208,7 @@ async function sendChat() {
   try {
     await carpoolApi.sendMessage(carpool.value.id, text)
     chatInput.value = ''
-    await loadMessages()
+    await loadMessages('force')
   } catch (e) {
     ElMessage.error(e?.response?.data?.detail || '发送失败')
   }
@@ -499,7 +508,7 @@ onBeforeUnmount(() => {
       <div class="chat-box">
         <div class="chat-box-title">💬 与发起人沟通</div>
         <template v-if="canChat">
-          <div v-loading="chatLoading" class="chat-list">
+          <div v-loading="chatLoading" ref="chatListRef" class="chat-list">
             <el-empty
               v-if="!chatMessages.length"
               description="暂无消息，打个招呼吧～"
