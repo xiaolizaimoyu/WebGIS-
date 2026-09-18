@@ -4,7 +4,7 @@
 // 已加固：加载中显示骨架、接口失败显示错误+重试，不再出现空白页
 import { onMounted, onUnmounted, ref, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import * as postApi from '@/api/post'
 import * as socialApi from '@/api/social'
 import { TYPE_MAP, formatTime } from '@/api/const'
@@ -67,6 +67,41 @@ function toMapNav() {
       navTitle: content.value.title
     }
   })
+}
+
+// ===== 分享功能（前端 B）=====
+// 优先调用 Web Share API（移动端原生分享），不支持则复制链接到剪贴板
+async function onShare() {
+  const url = window.location.href
+  const shareData = { title: content.value?.title || '校园内容', text: content.value?.title || '', url }
+  try {
+    if (navigator.share) {
+      await navigator.share(shareData)
+      return
+    }
+  } catch {
+    // 用户取消分享，不报错
+  }
+  // 降级：复制链接到剪贴板
+  try {
+    await navigator.clipboard.writeText(url)
+    ElMessage.success('链接已复制到剪贴板，快去分享吧～')
+  } catch {
+    // 剪贴板权限不足时用 textarea 兜底
+    const ta = document.createElement('textarea')
+    ta.value = url
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    try {
+      document.execCommand('copy')
+      ElMessage.success('链接已复制到剪贴板，快去分享吧～')
+    } catch {
+      ElMessage.info(`分享链接：${url}`)
+    }
+    document.body.removeChild(ta)
+  }
 }
 
 // 楼层回复（纯前端方案：@前缀+UI提示，不需后端改）
@@ -278,6 +313,7 @@ onUnmounted(() => {
           >
             {{ favorited ? '⭐ 已收藏' : '☆ 收藏' }}
           </el-button>
+          <el-button round @click="onShare">🔗 分享</el-button>
         </div>
       </el-card>
 
